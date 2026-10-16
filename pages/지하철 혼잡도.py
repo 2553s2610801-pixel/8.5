@@ -1,4 +1,9 @@
-<!DOCTYPE html>
+import streamlit as st
+import streamlit.components.v1 as components
+
+st.set_page_config(page_title="지하철 칸별 혼잡도", layout="wide")
+
+HTML = r'''<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -296,3 +301,6 @@ setLine("2");
 </script>
 </body>
 </html>
+'''
+
+components.html(HTML, height=950, scrolling=True)

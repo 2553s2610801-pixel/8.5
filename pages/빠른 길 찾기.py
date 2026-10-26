@@ -91,4 +91,99 @@ st.markdown("""
         text-align: center;
         margin-bottom: 25px;
     }
-    .header-box h1 { color: #000; font-size
+    .header-box h1 { color: #000; font-size: 36px; font-weight: 800; margin: 0; }
+    .card-blue { background-color: #EBF3FF; padding: 20px; border-radius: 12px; text-align: center; }
+    .card-green { background-color: #EAF7E8; padding: 20px; border-radius: 12px; text-align: center; }
+    .card-purple { background-color: #F2ECFB; padding: 20px; border-radius: 12px; text-align: center; }
+    .card-yellow { background-color: #FFF9E5; padding: 20px; border-radius: 12px; text-align: center; }
+    </style>
+""", unsafe_allow_html=True)
+
+def go_to(page_name):
+    st.session_state.page = page_name
+
+# --- 메인 화면 ---
+if st.session_state.page == "home":
+    st.markdown('<div class="header-box"><h1>길 찾기 대장</h1></div>', unsafe_allow_html=True)
+
+    search_col1, search_col2 = st.columns([4, 1])
+    with search_col1:
+        query = st.text_input("검색", placeholder="전철역 이름 입력 (예: 성환역, 평택역)", label_visibility="collapsed")
+    with search_col2:
+        if st.button("검색", type="primary", use_container_width=True):
+            clean_q = clean_station_name(query)
+            if clean_q in SUBWAY_STATIONS:
+                st.session_state.recent_searches.insert(0, clean_q)
+                st.success(f"🔍 '{clean_q}'을(를) 노선도에서 찾았습니다.")
+            else:
+                st.error(f"❌ '{query}'은(는) 등록된 전철역이 아닙니다.")
+
+    st.write("")
+
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown('<div class="card-blue"><h2>📍 빠른 길 찾기</h2><p>성환역 ↔ 평택역 등 최단 경로</p></div>', unsafe_allow_html=True)
+        if st.button("빠른 길 찾기 실행", key="btn_fast", use_container_width=True):
+            go_to("fast_route")
+            st.rerun()
+
+        st.write("")
+
+        st.markdown('<div class="card-purple"><h2>🕒 최근 검색</h2><p>이전에 탐색한 역 목록</p></div>', unsafe_allow_html=True)
+        if st.button("최근 검색 기록 보기", key="btn_recent", use_container_width=True):
+            go_to("recent")
+            st.rerun()
+
+    with col2:
+        st.markdown('<div class="card-green"><h2>🚌 대중교통</h2><p>서울/수도권 전철 사이버스테이션</p></div>', unsafe_allow_html=True)
+        if st.button("사이버스테이션 연결", key="btn_transit", use_container_width=True):
+            go_to("transit")
+            st.rerun()
+
+        st.write("")
+
+        st.markdown('<div class="card-yellow"><h2>⭐ 즐겨찾기</h2><p>자주 가는 역 관리</p></div>', unsafe_allow_html=True)
+        if st.button("즐겨찾기 목록 열기", key="btn_fav", use_container_width=True):
+            go_to("favorites")
+            st.rerun()
+
+# --- 상세 화면 ---
+else:
+    if st.button("⬅️ 메인 홈으로 돌아가기"):
+        go_to("home")
+        st.rerun()
+
+    st.divider()
+
+    if st.session_state.page == "fast_route":
+        st.title("📍 빠른 길 찾기")
+        
+        start_in = st.text_input("출발역 입력", value="성환역")
+        end_in = st.text_input("도착역 입력", value="평택역")
+        
+        if st.button("최단 경로 검색", type="primary"):
+            success, result = find_subway_route(start_in, end_in)
+            if not success:
+                st.error(result)
+            else:
+                st.success(
+                    f"🚃 **{result['start']}** ➡️ **{result['end']}**<br>"
+                    f"⏱️ **소요 시간**: 약 **{result['time']}분**<br>"
+                    f"🛤️ **추천 경로**: {result['route']}", 
+                    icon="✅"
+                )
+
+    elif st.session_state.page == "transit":
+        st.title("🚌 전철 사이버스테이션 연동")
+        st.write("공식 지하철 노선도 웹사이트입니다.")
+        st.link_button("🌐 서울교통공사 사이버스테이션 접속하기", "http://www.seoulmetro.co.kr/kr/cyberStation.do")
+
+    elif st.session_state.page == "recent":
+        st.title("🕒 최근 검색 기록")
+        for item in st.session_state.recent_searches:
+            st.write(f"- 🔍 {item}")
+
+    elif st.session_state.page == "favorites":
+        st.title("⭐ 즐겨찾기 장소")
+        for fav in st.session_state.favorites:
+            st.write(f"- 📌 {fav}")

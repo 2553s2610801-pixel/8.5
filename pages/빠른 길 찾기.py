@@ -15,54 +15,7 @@ if "recent_searches" not in st.session_state:
 if "favorites" not in st.session_state:
     st.session_state.favorites = ["성환역 (1호선)", "평택역 (1호선)", "강남역 (2호선)"]
 
-# 3. 대중교통 DB
-SUBWAY_STATIONS = [
-    "연천역", "동두천역", "의정부역", "청량리역", "서울역", "용산역", "영등포역", "신도림역", 
-    "구로역", "안양역", "수원역", "오산역", "서정리역", "평택지제역", "평택역", "성환역", 
-    "직산역", "두정역", "천안역", "아산역", "온양온천역", "신창역", "인천역",
-    "강남역", "홍대입구역", "잠실역", "고속터미널역", "사당역", "신촌역", "판교역", "여의도역"
-]
-
-BUS_STOPS = [
-    "성환버스터미널", "남서울대", "평택터미널", "천안터미널", "강남역시외버스정류장", 
-    "서울역버스환승센터", "수원역환승센터", "판교역보평교", "잠실역광역환승센터"
-]
-
-ALL_LOCATIONS = SUBWAY_STATIONS + BUS_STOPS
-
-TRANSIT_ROUTES = {
-    ("성환역", "평택역"): (6, "🚃 1호선 전철 직행 (1정거장)", "지하철"),
-    ("평택역", "성환역"): (6, "🚃 1호선 전철 직행 (1정거장)", "지하철"),
-    ("성환역", "천안역"): (10, "🚃 1호선 전철 직행 (2정거장)", "지하철"),
-    ("평택역", "수원역"): (32, "🚃 1호선 전철 직행", "지하철"),
-    ("성환역", "남서울대"): (8, "🚌 천안 시내버스 110번 / 130번 이용", "버스"),
-    ("남서울대", "성환역"): (8, "🚌 천안 시내버스 110번 / 130번 이용", "버스"),
-    ("성환버스터미널", "평택터미널"): (15, "🚌 시외버스 (성환-평택 노선)", "버스"),
-    ("평택역", "평택터미널전체 배경을 투박한 흰색이 아닌 **세련된 그레이 톤의 모던 웹 배경(#F8FAFC)**으로 변경하고, 카드 및 상단 헤더에 **웹 앱 전용 매끄러운 그림자(Shadow), 테두리(Border), 그리고 호버 애니메이션(Hover Effect)**을 추가하여 실제 상용 웹 서비스 같은 입체감을 살린 전체 코드입니다.
-
----
-
-### `app.py` (웹 레이아웃 스타일 적용 완료)
-
-```python
-import streamlit as st
-
-# 1. 페이지 기본 설정
-st.set_page_config(
-    page_title="길 찾기 대장",
-    page_icon="🗺️",
-    layout="centered"
-)
-
-# 2. 세션 상태 초기화
-if "page" not in st.session_state:
-    st.session_state.page = "home"
-if "recent_searches" not in st.session_state:
-    st.session_state.recent_searches = ["성환역 ➡️ 평택역", "강남역 ➡️ 판교역"]
-if "favorites" not in st.session_state:
-    st.session_state.favorites = ["성환역 (1호선)", "평택역 (1호선)", "강남역 (2호선)"]
-
-# 3. 종합 대중교통 DB
+# 3. 대중교통 DB (전철역 + 버스정류장)
 SUBWAY_STATIONS = [
     "연천역", "동두천역", "의정부역", "청량리역", "서울역", "용산역", "영등포역", "신도림역", 
     "구로역", "안양역", "수원역", "오산역", "서정리역", "평택지제역", "평택역", "성환역", 
@@ -128,15 +81,13 @@ def calculate_fast_route(start_raw, end_raw):
         "mode": "버스+지하철 연계"
     }
 
-# --- 웹 애플리케이션 느낌의 배경 & 인터페이스 CSS ---
+# --- 웹 애플리케이션 배경 & 인터페이스 CSS ---
 st.markdown("""
     <style>
-    /* 전체 웹 앱 배경색 (밝고 매끄러운 그레이 모던 톤) */
     .stApp {
         background-color: #F8FAFC;
     }
     
-    /* 상단 헤더 웹 대시보드 스타일 */
     .header-box {
         background: linear-gradient(135deg, #1E293B 0%, #334155 100%);
         padding: 30px 24px;
@@ -159,7 +110,6 @@ st.markdown("""
         margin-bottom: 0;
     }
 
-    /* 웹 카드 컨테이너 디테일 */
     .card {
         background-color: #FFFFFF;
         border: 1px solid #E2E8F0;
@@ -173,7 +123,6 @@ st.markdown("""
         justify-content: center;
         align-items: center;
         margin-bottom: 12px;
-        transition: all 0.2s ease-in-out;
     }
     .card h3 {
         font-size: 18px;
@@ -188,13 +137,11 @@ st.markdown("""
         word-break: keep-all;
     }
 
-    /* 상단 시그니처 가이드 라인 */
     .card-route { border-top: 4px solid #2563EB; }
     .card-transit { border-top: 4px solid #059669; }
     .card-recent { border-top: 4px solid #7C3AED; }
     .card-fav { border-top: 4px solid #D97706; }
     
-    /* 버튼 스타일 다듬기 */
     .stButton > button {
         border-radius: 8px !important;
         font-weight: 600 !important;
@@ -296,7 +243,7 @@ else:
     elif st.session_state.page == "transit":
         st.title("🚌 대중교통 노선 연동")
         st.write("공식 수도권 지하철 노선도 및 버스 정보 서비스입니다.")
-        st.link_button("🌐 서울교통공사 사이버스테이션 접속", "[http://www.seoulmetro.co.kr/kr/cyberStation.do](http://www.seoulmetro.co.kr/kr/cyberStation.do)")
+        st.link_button("🌐 서울교통공사 사이버스테이션 접속", "http://www.seoulmetro.co.kr/kr/cyberStation.do")
 
     elif st.session_state.page == "recent":
         st.title("🕒 최근 탐색 경로")

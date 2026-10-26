@@ -1,4 +1,5 @@
 import streamlit as st
+import hashlib
 
 # 페이지 기본 설정
 st.set_page_config(
@@ -42,6 +43,28 @@ st.markdown("""
 def go_to(page_name):
     st.session_state.page = page_name
 
+# 출발지/도착지 입력에 따른 시간 및 경로 계산 함수
+def calculate_route_time(start, end):
+    if not start or not end:
+        return None, None
+    if start.strip() == end.strip():
+        return 0, "동일한 위치입니다."
+    
+    # 두 장소 이름을 기반으로 고유한 시간(10분 ~ 75분 사이) 계산
+    combined = f"{start.strip()}_{end.strip()}"
+    hash_val = int(hashlib.md5(combined.encode('utf-8')).hexdigest(), 16)
+    minutes = 10 + (hash_val % 66)
+    
+    # 소요 시간에 따른 수단 안내
+    if minutes < 20:
+        transport = "도보 또는 버스 이용"
+    elif minutes < 45:
+        transport = "지하철 최단 경로 이용"
+    else:
+        transport = "지하철 환승 + 버스 이용"
+        
+    return minutes, transport
+
 # --- 1. 홈 화면 ---
 if st.session_state.page == "home":
     st.markdown('<div class="header-box"><h1>길 찾기 대장</h1></div>', unsafe_allow_html=True)
@@ -82,39 +105,4 @@ if st.session_state.page == "home":
 
         st.write("")
 
-        st.markdown('<div class="card-yellow"><h2>⭐ 즐겨찾기</h2><p>자주 가는 장소를 저장해보세요</p></div>', unsafe_allow_html=True)
-        if st.button("즐겨찾기 목록 보기", key="btn_fav", use_container_width=True):
-            go_to("favorites")
-            st.rerun()
-
-# --- 2. 상세 페이지들 ---
-else:
-    if st.button("⬅️ 메인 홈으로 돌아가기"):
-        go_to("home")
-        st.rerun()
-
-    st.divider()
-
-    if st.session_state.page == "fast_route":
-        st.title("📍 빠른 길 찾기")
-        start = st.text_input("출발지 입력", value="서울역")
-        end = st.text_input("도착지 입력", value="강남역")
-        if st.button("최적 경로 검색", type="primary"):
-            st.success(f"<b>{start}</b> ➡️ <b>{end}</b> 최단 경로: 약 28분 소요 (지하철 2호선 이용)", icon="🚗")
-
-    elif st.session_state.page == "transit":
-        st.title("🚌 대중교통 & 🚇 지하철 혼잡도")
-        st.subheader("실시간 지하철 혼잡도")
-        line = st.selectbox("노선 선택", ["1호선", "2호선", "3호선", "4호선", "9호선"])
-        station = st.text_input("역 이름 입력", value="강남역")
-        st.info(f"💡 {line} **{station}** 현재 혼잡도: **보통 (65%)**")
-
-    elif st.session_state.page == "recent":
-        st.title("🕒 최근 검색 기록")
-        for item in st.session_state.recent_searches:
-            st.write(f"- 🔍 {item}")
-
-    elif st.session_state.page == "favorites":
-        st.title("⭐ 즐겨찾기 장소")
-        for fav in st.session_state.favorites:
-            st.write(f"- 📌 {fav}")
+        st.markdown('<div class="card-yellow"><h2>⭐ 즐겨찾기</h2><p>자주 가는 장소를 저장해보세요</p></div>',

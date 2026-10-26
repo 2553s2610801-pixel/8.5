@@ -1,13 +1,13 @@
 import streamlit as st
 
-# 페이지 기본 설정 (반드시 코드 최상단에 위치해야 에러가 나지 않습니다)
+# 페이지 기본 설정 (반드시 코드 최상단에 위치)
 st.set_page_config(
     page_title="대중교통 이동경로 탐색 - 홈",
     page_icon="🚇",
     layout="wide",
 )
 
-# 커스텀 CSS 스타일링
+# 스타일 정의
 st.markdown(
     """
     <style>
@@ -49,7 +49,7 @@ st.markdown(
 
 st.divider()
 
-# 서비스 소개 섹션 (팀원들이 담당한 기능 소개)
+# 서비스 소개 섹션
 st.subheader("✨ 주요 기능 안내")
 
 col1, col2, col3 = st.columns(3)
@@ -57,12 +57,18 @@ col1, col2, col3 = st.columns(3)
 with col1:
     st.markdown("### 🚀 빠른 길찾기")
     st.markdown(
-        """
-        <div class="feature-card">
-        출발지와 목적지를 입력하면 최적의 대중교통 경로와 예상 소요 시간을 실시간으로 안내합니다.
-        </div>
-        """,
+        '<div class="feature-card">출발지와 목적지를 입력하면 최적의 대중교통 경로와 예상 소요 시간을 실시간으로 안내합니다.</div>',
         unsafe_allow_html=True,
     )
 
 with col2:
+    st.markdown("### 🚇 지하철 혼잡도")
+    st.markdown(
+        '<div class="feature-card">실시간 지하철 칸별 혼잡도를 미리 확인하고, 여유로운 칸을 골라 쾌적하게 탑승할 수 있습니다.</div>',
+        unsafe_allow_html=True,
+    )
+
+with col3:
+    st.markdown("### 🚌 버스 혼잡도")
+    st.markdown(
+        '<div class="feature-card">탑승하려는 버스의 실시간 혼잡 상태를 한눈에 파악할 수 있습니다.</div>',

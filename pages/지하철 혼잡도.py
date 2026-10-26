@@ -14,99 +14,124 @@ HTML = r'''<!DOCTYPE html>
 <link href="https://fonts.googleapis.com/css2?family=Jua&family=Gowun+Dodum&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg1:#e7eeff; --bg2:#f5eeff; --card:#fff; --soft:#f0f3ff; --ink:#2b3350; --muted:#6b7394;
-    --accent:#5b7cfa; --accent-d:#4766e6;
-    --low:#8be3b0; --mid:#ffd86b; --high:#ff8d84;
-    --f-title:"Jua","Gowun Dodum","Malgun Gothic",sans-serif;
-    --f-body:"Gowun Dodum","Pretendard","Noto Sans KR","Malgun Gothic",sans-serif;
+    --bg1:#fff0f5; --bg2:#f0f7ff; --card:#ffffff; --soft:#fff5f8; --ink:#3a3238; --muted:#8c7d87;
+    --accent:#ff9ebb; --accent-d:#ff7399;
+    --low:#b2f2bb; --mid:#ffec99; --high:#ffc9c9;
+    --f-title:"Jua","Gowun Dodum",sans-serif;
+    --f-body:"Gowun Dodum","Pretendard",sans-serif;
   }
   *{box-sizing:border-box}
-  body{margin:0;min-height:100vh;background:linear-gradient(160deg,var(--bg1),var(--bg2));color:var(--ink);font-family:var(--f-body);display:flex;justify-content:center;padding:22px 12px}
+  body{margin:0;min-height:100vh;background:linear-gradient(135deg,var(--bg1),var(--bg2));color:var(--ink);font-family:var(--f-body);display:flex;justify-content:center;padding:22px 12px}
   button,select,input{font:inherit;color:inherit}
   :focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-  .app{width:100%;max-width:880px;background:var(--card);border-radius:36px;box-shadow:0 14px 44px rgba(91,124,250,.2);padding:26px 28px 24px}
+  
+  /* 치이카와 귀여운 메인 카드 */
+  .app{width:100%;max-width:880px;background:var(--card);border-radius:42px;border:4px solid #f2d6e3;box-shadow:0 16px 36px rgba(255,182,193,.35);padding:28px 30px 24px}
 
-  header{display:flex;align-items:center;gap:14px}
-  .logo{width:56px;height:56px;border-radius:18px;background:var(--soft);display:grid;place-items:center;font-size:30px}
-  h1{margin:0;font-family:var(--f-title);font-weight:400;font-size:1.65rem;letter-spacing:-.01em}
-  header p{margin:2px 0 0;color:var(--muted);font-size:.95rem}
+  header{display:flex;align-items:center;gap:16px}
+  .logo{width:62px;height:62px;border-radius:50%;background:#ffe3ec;border:3px solid #ffc2d4;display:grid;place-items:center;font-size:34px;box-shadow:inset 0 -4px 0 #ffa8c0}
+  h1{margin:0;font-family:var(--f-title);font-size:1.8rem;color:#5a434d}
+  header p{margin:2px 0 0;color:var(--muted);font-size:.95rem;font-weight:bold}
 
-  .panel{margin-top:20px;padding:18px 20px;background:var(--soft);border-radius:26px;display:grid;gap:14px}
+  /* 검색 패널 */
+  .panel{margin-top:20px;padding:20px 24px;background:var(--soft);border-radius:30px;border:2px dashed #fcd5e4;display:grid;gap:14px}
   .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-  .lab{width:70px;flex:none;font-family:var(--f-title);font-size:1.05rem}
-  .chips{display:flex;gap:7px;flex-wrap:wrap}
-  .chip{width:42px;height:42px;border-radius:50%;border:0;color:#fff;font-family:var(--f-title);font-size:1.1rem;cursor:pointer;opacity:.5;transition:transform .15s,opacity .15s,box-shadow .15s}
-  .chip:hover{opacity:.85}
-  .chip[aria-pressed="true"]{opacity:1;transform:scale(1.14);box-shadow:0 0 0 3px #fff,0 0 0 5px var(--ink)}
+  .lab{width:75px;flex:none;font-family:var(--f-title);font-size:1.1rem;color:#6b4d5a}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{width:40px;height:40px;border-radius:50%;border:2px solid rgba(0,0,0,.08);color:#fff;font-family:var(--f-title);font-size:1.05rem;cursor:pointer;opacity:.6;transition:transform .2s,opacity .2s,box-shadow .2s}
+  .chip:hover{opacity:.9;transform:scale(1.08)}
+  .chip[aria-pressed="true"]{opacity:1;transform:scale(1.18);box-shadow:0 0 0 3px #fff,0 0 0 5px var(--accent-d)}
+  
   .search{position:relative;flex:1;min-width:210px}
-  .search input{width:100%;padding:11px 18px;border:2px solid transparent;border-radius:999px;background:#fff;box-shadow:0 2px 8px rgba(43,51,80,.08)}
-  .search input:focus{border-color:var(--accent);outline:none}
-  .list{position:absolute;z-index:5;left:0;right:0;top:calc(100% + 6px);max-height:250px;overflow:auto;background:#fff;border-radius:18px;box-shadow:0 10px 30px rgba(43,51,80,.18);margin:0;padding:6px;list-style:none}
+  .search input{width:100%;padding:12px 20px;border:2px solid #ffd0e0;border-radius:999px;background:#fff;box-shadow:0 3px 10px rgba(255,182,193,.15)}
+  .search input:focus{border-color:var(--accent-d);outline:none}
+  .list{position:absolute;z-index:5;left:0;right:0;top:calc(100% + 6px);max-height:250px;overflow:auto;background:#fff;border-radius:22px;border:2px solid #fcd5e4;box-shadow:0 10px 30px rgba(255,182,193,.25);margin:0;padding:8px;list-style:none}
   .list[hidden]{display:none}
-  .list li{display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:12px;cursor:pointer}
+  .list li{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:14px;cursor:pointer}
   .list li:hover,.list li.on{background:var(--soft)}
   .b{min-width:24px;height:24px;border-radius:12px;color:#fff;font-size:.78rem;display:inline-flex;align-items:center;justify-content:center;padding:0 7px;font-family:var(--f-title)}
-  .rg{margin-left:auto;font-size:.75rem;color:var(--accent-d);background:#e3e9ff;border-radius:999px;padding:2px 9px}
+  .rg{margin-left:auto;font-size:.75rem;color:var(--accent-d);background:#ffeaf1;border-radius:999px;padding:2px 10px;font-weight:bold}
   .none{color:var(--muted);cursor:default}
-  select{padding:10px 16px;border:0;border-radius:999px;background:#fff;box-shadow:0 2px 8px rgba(43,51,80,.08);min-width:200px}
-  .go{margin-left:auto;padding:12px 34px;border:0;border-radius:999px;background:var(--accent);color:#fff;font-family:var(--f-title);font-size:1.15rem;cursor:pointer;box-shadow:0 5px 0 var(--accent-d);transition:transform .1s,box-shadow .1s}
-  .go:active{transform:translateY(4px);box-shadow:0 1px 0 var(--accent-d)}
-  .msg{min-height:1.2em;font-size:.9rem;color:#d6403a;margin-top:-4px}
+  select{padding:11px 18px;border:2px solid #ffd0e0;border-radius:999px;background:#fff;box-shadow:0 3px 10px rgba(255,182,193,.15);min-width:200px}
+  
+  /* 귀여운 확인 버튼 */
+  .go{margin-left:auto;padding:12px 36px;border:0;border-radius:999px;background:var(--accent);color:#fff;font-family:var(--f-title);font-size:1.2rem;cursor:pointer;box-shadow:0 6px 0 var(--accent-d);transition:transform .1s,box-shadow .1s}
+  .go:hover{background:#ff8daf}
+  .go:active{transform:translateY(4px);box-shadow:0 2px 0 var(--accent-d)}
+  .msg{min-height:1.2em;font-size:.92rem;color:#ff4d4d;margin-top:-4px;font-weight:bold}
 
   [hidden]{display:none!important}
+  
+  /* 대시보드 헤더 & 새로고침 버튼 */
   .head{margin-top:24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
-  .head .t{font-family:var(--f-title);font-size:1.25rem}
-  .lvl{margin-left:auto;padding:6px 16px;border-radius:999px;font-family:var(--f-title)}
-  .lvl.low{background:var(--low)} .lvl.mid{background:var(--mid)} .lvl.high{background:var(--high)}
+  .head .t{font-family:var(--f-title);font-size:1.35rem;color:#4a3842}
+  .lvl{margin-left:auto;padding:6px 18px;border-radius:999px;font-family:var(--f-title);border:2px solid rgba(0,0,0,.05)}
+  .lvl.low{background:var(--low);color:#2b6e3b} 
+  .lvl.mid{background:var(--mid);color:#856404} 
+  .lvl.high{background:var(--high);color:#9c2b2b}
 
-  .train{display:flex;align-items:flex-end;gap:3px;margin-top:18px;padding-bottom:12px;position:relative}
-  .train::after{content:"";position:absolute;left:0;right:0;bottom:0;height:5px;border-radius:3px;background:repeating-linear-gradient(90deg,#c9d1ef 0 14px,transparent 14px 20px)}
-  .cap{width:16px;height:58px;background:var(--ink);margin-bottom:12px}
+  /* 새로고침 버튼 디자인 */
+  .btn-refresh{padding:8px 18px;border:2px solid #ffc2d4;border-radius:999px;background:#fff;color:#5a434d;font-family:var(--f-title);font-size:.95rem;cursor:pointer;display:inline-flex;align-items:center;gap:6px;box-shadow:0 3px 8px rgba(0,0,0,.05);transition:all .2s}
+  .btn-refresh:hover{background:#ffeef4;transform:rotate(10deg)}
+  .btn-refresh:active{transform:scale(.95)}
+  .btn-refresh.spinning .icon{animation:spin .6s ease-in-out}
+  @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+  /* 지하철 열차 표현 */
+  .train{display:flex;align-items:flex-end;gap:4px;margin-top:20px;padding-bottom:14px;position:relative}
+  .train::after{content:"";position:absolute;left:0;right:0;bottom:0;height:6px;border-radius:3px;background:repeating-linear-gradient(90deg,#ffd0e0 0 16px,transparent 16px 24px)}
+  .cap{width:18px;height:62px;background:#6c5b65;margin-bottom:12px;border-radius:6px}
   .cap.l{border-radius:30px 6px 6px 30px}.cap.r{border-radius:6px 30px 30px 6px}
-  .cars{flex:1;display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+  .cars{flex:1;display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+  
   .car{display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;animation:pop .45s cubic-bezier(.3,1.5,.5,1) both;animation-delay:calc(var(--i)*60ms)}
   @keyframes pop{from{opacity:0;transform:translateY(16px) scale(.85)}to{opacity:1;transform:none}}
-  .no{font-size:.85rem;color:var(--muted)}
-  .best .no{color:var(--ink);font-family:var(--f-title)}
-  .box{width:100%;height:100px;border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative;box-shadow:inset 0 -6px 0 rgba(43,51,80,.12)}
-  .box .face{font-size:1.9rem;line-height:1}
-  .box .pct{font-family:var(--f-title);font-size:1rem}
+  .no{font-size:.85rem;color:var(--muted);font-weight:bold}
+  .best .no{color:#ff5285;font-family:var(--f-title);font-size:.95rem}
+  
+  /* 칸별 혼잡도 박스 (치이카와 둥글둥글 스타일) */
+  .box{width:100%;height:105px;border-radius:24px;border:3px solid rgba(0,0,0,.06);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;position:relative;box-shadow:inset 0 -6px 0 rgba(0,0,0,.08)}
+  .box .face{font-size:2.2rem;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.1))}
+  .box .pct{font-family:var(--f-title);font-size:1.05rem;color:#333}
   .box.low{background:var(--low)}.box.mid{background:var(--mid)}.box.high{background:var(--high)}
-  .star{position:absolute;top:-10px;right:-6px;font-size:1.2rem}
-  .near{font-size:.68rem;line-height:1.2;text-align:center;color:var(--muted);min-height:2.4em}
+  .star{position:absolute;top:-12px;right:-4px;font-size:1.4rem;animation:bounce 1s infinite alternate}
+  @keyframes bounce{from{transform:translateY(0)}to{transform:translateY(-4px)}}
+  .near{font-size:.72rem;line-height:1.2;text-align:center;color:#8a707c;font-weight:bold;min-height:2.4em}
 
-  .lower{display:grid;grid-template-columns:230px 1fr;gap:18px;margin-top:6px;align-items:stretch}
-  .legend{background:var(--soft);border-radius:24px;padding:18px 10px;display:flex;justify-content:space-around;align-items:center}
-  .legend div{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:.9rem}
-  .dot{width:44px;height:44px;border-radius:50%;display:grid;place-items:center;font-size:1.4rem}
-  .bubble{position:relative;background:var(--soft);border-radius:26px;padding:22px 28px;min-height:170px;display:flex;flex-direction:column;justify-content:center}
-  .bubble::before{content:"";position:absolute;left:-10px;top:50%;margin-top:-10px;border:10px solid transparent;border-left:0;border-right-color:var(--soft)}
-  .tag{align-self:flex-start;background:var(--accent);color:#fff;border-radius:999px;padding:3px 12px;font-size:.8rem;margin-bottom:8px}
-  .big{margin:0;font-family:var(--f-title);font-size:2.1rem;line-height:1.3}
-  .sub{margin:10px 0 0;color:var(--muted);font-size:.95rem;line-height:1.55}
-  .hint{margin:24px 0 0;padding:34px 20px;border-radius:26px;background:var(--soft);text-align:center;color:var(--muted);line-height:1.7}
-  .hint .e{font-size:2rem;display:block}
-  .foot{margin:14px 0 0;color:var(--muted);font-size:.82rem;text-align:right}
+  /* 하단 추천 말풍선 */
+  .lower{display:grid;grid-template-columns:230px 1fr;gap:18px;margin-top:10px;align-items:stretch}
+  .legend{background:var(--soft);border-radius:28px;border:2px solid #fcd5e4;padding:18px 10px;display:flex;justify-content:space-around;align-items:center}
+  .legend div{display:flex;flex-direction:column;align-items:center;gap:6px;font-size:.9rem;font-weight:bold}
+  .dot{width:46px;height:46px;border-radius:50%;display:grid;place-items:center;font-size:1.6rem;box-shadow:0 3px 8px rgba(0,0,0,.08)}
+  
+  .bubble{position:relative;background:var(--soft);border-radius:30px;border:3px solid #ffcadb;padding:22px 28px;min-height:170px;display:flex;flex-direction:column;justify-content:center}
+  .bubble::before{content:"";position:absolute;left:-12px;top:50%;margin-top:-10px;border:10px solid transparent;border-left:0;border-right-color:#ffcadb}
+  .tag{align-self:flex-start;background:var(--accent-d);color:#fff;border-radius:999px;padding:4px 14px;font-family:var(--f-title);font-size:.85rem;margin-bottom:8px;box-shadow:0 2px 6px rgba(255,115,153,.3)}
+  .big{margin:0;font-family:var(--f-title);font-size:2.1rem;line-height:1.3;color:#4a323d}
+  .sub{margin:10px 0 0;color:#7a626f;font-size:.98rem;line-height:1.55;font-weight:bold}
+  
+  .hint{margin:24px 0 0;padding:36px 20px;border-radius:30px;background:var(--soft);border:2px dashed #fcd5e4;text-align:center;color:#7a626f;line-height:1.7;font-weight:bold}
+  .hint .e{font-size:2.2rem;display:block;margin-bottom:6px}
+  .foot{margin:14px 0 0;color:var(--muted);font-size:.85rem;text-align:right;font-weight:bold}
 
   @media (max-width:640px){
-    .app{padding:20px 14px;border-radius:26px}
-    h1{font-size:1.3rem}.lab{width:100%}
+    .app{padding:20px 16px;border-radius:30px}
+    h1{font-size:1.4rem}.lab{width:100%}
     .go{width:100%;margin-left:0}select{width:100%}
     .lower{grid-template-columns:1fr}.bubble::before{display:none}
-    .cars{gap:3px}.box{height:76px;border-radius:14px}.box .face{font-size:1.3rem}.box .pct{font-size:.78rem}
-    .no{font-size:.7rem}.near{font-size:.58rem}.cap{width:9px;height:44px}
-    .big{font-size:1.6rem}
+    .cars{gap:3px}.box{height:82px;border-radius:18px}.box .face{font-size:1.5rem}.box .pct{font-size:.82rem}
+    .no{font-size:.72rem}.near{font-size:.6rem}.cap{width:10px;height:48px}
+    .big{font-size:1.65rem}
   }
-  @media (prefers-reduced-motion:reduce){.car{animation:none}.chip,.go{transition:none}}
 </style>
 </head>
 <body>
 <main class="app">
   <header>
-    <div class="logo" aria-hidden="true">🚇</div>
+    <div class="logo" aria-hidden="true">🐰</div>
     <div>
       <h1>지하철 칸별 혼잡도 확인</h1>
-      <p>붐비는 칸 말고, 여유로운 칸으로 타요!</p>
+      <p>복잡복잡 싫어! 쾌적하고 여유로운 칸으로 타요 ( •̀ω•́ )✨</p>
     </div>
   </header>
 
@@ -122,7 +147,7 @@ HTML = r'''<!DOCTYPE html>
     <div class="row">
       <span class="lab">방향</span>
       <select id="dir" aria-label="방향 선택"></select>
-      <button class="go" type="submit">확인</button>
+      <button class="go" type="submit">확인 💖</button>
     </div>
     <div class="msg" id="msg" role="alert"></div>
   </form>
@@ -132,25 +157,26 @@ HTML = r'''<!DOCTYPE html>
       <span class="b" id="hLine"></span>
       <span class="t" id="hText"></span>
       <span class="lvl" id="hLvl"></span>
+      <button class="btn-refresh" id="refreshBtn" type="button"><span class="icon">🔄</span>실시간 새로고침</button>
     </div>
     <div class="train">
       <span class="cap l"></span><div class="cars" id="cars"></div><span class="cap r"></span>
     </div>
     <div class="lower">
       <div class="legend">
-        <div><span class="dot" style="background:var(--low)">😊</span>적음</div>
-        <div><span class="dot" style="background:var(--mid)">😐</span>중간</div>
-        <div><span class="dot" style="background:var(--high)">😫</span>많음</div>
+        <div><span class="dot" style="background:var(--low)"> ( ˶ˆ⤙ˆ˵ )</span>여유</div>
+        <div><span class="dot" style="background:var(--mid)">( • ̀ω•́ )</span>보통</div>
+        <div><span class="dot" style="background:var(--high)">( 🚨 Log )</span>복잡</div>
       </div>
       <div class="bubble" aria-live="polite">
-        <span class="tag">추천</span>
+        <span class="tag">치이카와 추천!</span>
         <p class="big" id="rec"></p>
         <p class="sub" id="warn"></p>
       </div>
     </div>
     <p class="foot" id="time"></p>
   </section>
-  <div class="hint" id="hint"><span class="e">🚉</span>노선과 역, 방향을 고르고 <b>확인</b>을 눌러 보세요.<br>다음 열차의 칸별 혼잡도를 알려드려요.</div>
+  <div class="hint" id="hint"><span class="e">🌸 🚇 🌸</span>노선과 역, 방향을 고르고 <b>확인</b>을 눌러 보세요!<br>다음 열차의 칸별 혼잡도를 귀엽게 알려드려요.</div>
 </main>
 
 <script>
@@ -179,19 +205,13 @@ const LINES = {
 };
 Object.values(LINES).forEach(l => l.stations = l.st.split(" "));
 
-/* 지역 태그 (1호선 충남·경기 남부 구간) — 지역 이름으로도 검색됩니다 */
 const REGION = {};
 [["천안시","두정 천안 봉명 쌍용 성환 직산"],["아산시","아산 배방 온양온천 신창"],["평택시","평택 지제 서정리 송탄 진위"]]
   .forEach(([r,s])=>s.split(" ").forEach(n=>REGION["1"+n]=r));
 const regionOf=(line,st)=>REGION[line+st]||"";
 
-/* 계단·에스컬레이터 근처 칸 (예시값 — 실제 정보는 키를 "노선+역이름"으로 추가: "1두정":[2,6]) */
 const EXITS = {};
 
-/* ================= 혼잡도 조회 =================
-   지금은 (노선·역·방향·시간대)로 만든 "예시 데이터"입니다.
-   실제 서비스에서는 이 함수 안을 fetch(...) 호출로 바꾸고,
-   길이 7 배열 [0~100, ...] (칸별 혼잡도 %)만 돌려주면 나머지는 그대로 동작합니다. */
 function rng(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
 function hash(s){let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(0),16777619);return h>>>0}
 function exitCars(line,st){
@@ -200,11 +220,14 @@ function exitCars(line,st){
   let b=Math.floor(r()*CAR_COUNT)+1; if(b===a) b=a%CAR_COUNT+1;
   return [a,b].sort((x,y)=>x-y);
 }
+
+// 혼잡도 조회 (새로고침 시 난수 시드 갱신)
+let refreshOffset = 0;
 async function fetchCongestion(line,station,dirIdx){
   const now=new Date(), h=now.getHours()+now.getMinutes()/60, wk=now.getDay()%6!==0;
   const rush = wk ? Math.max(Math.exp(-((h-8.3)**2)/1.5), Math.exp(-((h-18.3)**2)/2)) : 0.25;
   const base = 0.25 + 0.5*rush;
-  const bucket = Math.floor(now.getTime()/(5*60*1000));
+  const bucket = Math.floor(now.getTime()/(5*60*1000)) + refreshOffset;
   const r = rng(hash(line+station+dirIdx)+bucket);
   const near = exitCars(line,station);
   return Array.from({length:CAR_COUNT},(_,i)=>{
@@ -213,10 +236,10 @@ async function fetchCongestion(line,station,dirIdx){
   });
 }
 
-/* ================= 유틸 ================= */
+/* ================= 치이카와 스타일 표정 ================= */
 const LV = p => p<40?"low":p<70?"mid":"high";
-const LVTXT = {low:"적음",mid:"중간",high:"많음"};
-const FACE = {low:"😊",mid:"😐",high:"😫"};
+const LVTXT = {low:"여유",mid:"보통",high:"복잡"};
+const FACE = {low:"( ˶ˆ⤙ˆ˵ )",mid:"( • ̀ω•́ )",high:"( 😭 )"};
 const $ = id => document.getElementById(id);
 const state = {line:"1", station:null};
 
@@ -255,7 +278,7 @@ function renderList(){
   list.innerHTML = items.length
     ? items.map((it,i)=>{const rg=regionOf(it.line,it.st);
         return `<li role="option" data-i="${i}"><span class="b" style="background:${LINES[it.line].color}">${it.line}</span>${it.st}역${rg?`<span class="rg">${rg}</span>`:""}</li>`}).join("")
-    : `<li class="none">검색 결과가 없어요</li>`;
+    : `<li class="none">검색 결과가 없어요 🥺</li>`;
 }
 const openList=()=>{list.hidden=false;q.setAttribute("aria-expanded","true")};
 const closeList=()=>{list.hidden=true;q.setAttribute("aria-expanded","false")};
@@ -280,60 +303,39 @@ q.addEventListener("keydown",e=>{
 list.addEventListener("mousedown",e=>{const li=e.target.closest("li[data-i]"); if(li){e.preventDefault();pick(+li.dataset.i);}});
 document.addEventListener("click",e=>{if(!e.target.closest(".search")) closeList();});
 
-/* ================= 확인 ================= */
-$("form").addEventListener("submit",async e=>{
-  e.preventDefault();
+/* ================= 제출 & 데이터 로드 ================= */
+async function executeSearch() {
   if(!state.station){
     const kw=q.value.trim().replace(/역$/,"");
     const hit=LINES[state.line].stations.includes(kw)?{line:state.line,st:kw}
       :Object.entries(LINES).map(([n,l])=>l.stations.includes(kw)?{line:n,st:kw}:null).find(Boolean);
     if(hit){ if(hit.line!==state.line) setLine(hit.line,true); state.station=hit.st; q.value=hit.st+"역"; }
   }
-  if(!state.station){ $("msg").textContent="목록에서 역을 골라 주세요."; q.focus(); return; }
+  if(!state.station){ $("msg").textContent="목록에서 역을 먼저 골라 주세요! 🥺"; q.focus(); return; }
   $("msg").textContent="";
   const {line,station}=state, dirIdx=+$("dir").value;
   let data;
   try{ data=await fetchCongestion(line,station,dirIdx); }
   catch{ $("msg").textContent="혼잡도를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요."; return; }
   show(line,station,dirIdx,data);
+}
+
+$("form").addEventListener("submit", async e=>{
+  e.preventDefault();
+  refreshOffset = 0;
+  await executeSearch();
+});
+
+/* 새로고침 버튼 동작 */
+$("refreshBtn").addEventListener("click", async ()=>{
+  const btn = $("refreshBtn");
+  btn.classList.add("spinning");
+  refreshOffset += 1;
+  await executeSearch();
+  setTimeout(()=>btn.classList.remove("spinning"), 600);
 });
 
 function show(line,station,dirIdx,data){
   const near=exitCars(line,station), lv=data.map(LV);
   const avg=Math.round(data.reduce((a,b)=>a+b,0)/data.length);
-  const min=Math.min(...data), best=data.indexOf(min)+1;
-
-  $("hLine").textContent=line+"호선"; $("hLine").style.background=LINES[line].color;
-  $("hText").textContent=`${station}역 · ${LINES[line].dir[dirIdx]}`;
-  $("hLvl").textContent=`전체 ${LVTXT[LV(avg)]} (약 ${avg}%)`; $("hLvl").className="lvl "+LV(avg);
-
-  $("cars").innerHTML=data.map((p,i)=>`
-    <div class="car ${i+1===best?"best":""}" style="--i:${i}">
-      <span class="no">${i+1}호차</span>
-      <div class="box ${lv[i]}" role="img" aria-label="${i+1}호차 혼잡도 ${LVTXT[lv[i]]} ${p}%">
-        ${i+1===best?'<span class="star">⭐</span>':""}
-        <span class="face">${FACE[lv[i]]}</span><span class="pct">${p}%</span>
-      </div>
-      <span class="near">${near.includes(i+1)?"계단·에스컬<br>레이터 근처":""}</span>
-    </div>`).join("");
-
-  const low=lv.map((v,i)=>v==="low"?i+1:0).filter(Boolean);
-  const high=lv.map((v,i)=>v==="high"?i+1:0).filter(Boolean);
-  $("rec").innerHTML = low.length ? `${low.join(",")}호차<br>여유있음`
-    : lv.includes("mid") ? `${best}호차가<br>제일 한산해요` : `모든 칸이 붐벼요<br>다음 열차를 추천해요`;
-  const jam=near.filter(n=>lv[n-1]==="high");
-  $("warn").textContent = jam.length
-    ? `${jam.join(",")}호차는 계단·에스컬레이터 근처라 사람이 몰려요. 한산한 칸으로 이동해 주세요.`
-    : high.length ? `${high.join(",")}호차가 붐벼요. 한산한 칸을 이용해 주세요.` : "대부분의 칸이 여유로워요.";
-  $("time").textContent=`${new Date().toLocaleTimeString("ko-KR")} 기준 · 예시 데이터`;
-
-  $("hint").hidden=true; $("out").hidden=false;
-}
-
-setLine("1");
-</script>
-</body>
-</html>
-'''
-
-components.html(HTML, height=1050, scrolling=True)
+  const min=Math.min(...data), best=data

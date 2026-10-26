@@ -1,9 +1,4 @@
-import streamlit as st
-import streamlit.components.v1 as components
-
-st.set_page_config(page_title="지하철 칸별 혼잡도", layout="wide")
-
-HTML_CONTENT = """<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
@@ -188,4 +183,174 @@ const LINES = {
   "6":{color:"#CD7C2F",dir:["상행 (응암 방면)","하행 (봉화산 방면)"],
     st:"응암 역촌 불광 독바위 연신내 구산 새절 증산 디지털미디어시티 월드컵경기장 마포구청 망원 합정 상수 광흥창 대흥 공덕 효창공원앞 삼각지 녹사평 이태원 한강진 버티고개 약수 청구 신당 동묘앞 창신 보문 안암 고려대 월곡 상월곡 돌곶이 석계 태릉입구 화랑대 봉화산"},
   "7":{color:"#747F00",dir:["상행 (장암 방면)","하행 (석남 방면)"],
-    st:"장암 도봉산 수락산 마들 노원 중계 하계 공릉 태릉입구 먹골 중화 상봉 면목 사가정
+    st:"장암 도봉산 수락산 마들 노원 중계 하계 공릉 태릉입구 먹골 중화 상봉 면목 사가정 용마산 중곡 군자 어린이대공원 건대입구 뚝섬유원지 청담 강남구청 학동 논현 반포 고속터미널 내방 이수 남성 숭실대입구 상도 장승배기 신대방삼거리 보라매 신풍 대림 남구로 가산디지털단지 철산 광명사거리 천왕 온수 까치울 부천종합운동장 춘의 신중동 부천시청 상동 삼산체육관 굴포천 부평구청 산곡 석남"},
+  "8":{color:"#E6186C",dir:["상행 (암사 방면)","하행 (모란 방면)"],
+    st:"암사 천호 강동구청 몽촌토성 잠실 석촌 송파 가락시장 문정 장지 복정 남위례 산성 남한산성입구 단대오거리 신흥 수진 모란"},
+  "9":{color:"#B8A77A",dir:["상행 (개화 방면)","하행 (중앙보훈병원 방면)"],
+    st:"개화 김포공항 공항시장 신방화 마곡나루 양천향교 가양 증미 등촌 염창 신목동 선유도 당산 국회의사당 여의도 샛강 노량진 노들 흑석 동작 구반포 신반포 고속터미널 사평 신논현 언주 선정릉 삼성중앙 봉은사 종합운동장 삼전 석촌고분 석촌 송파나루 한성백제 올림픽공원 둔촌오륜 중앙보훈병원"}
+};
+Object.values(LINES).forEach(l => l.stations = l.st.split(" "));
+
+const REGION = {};
+[["천안시","두정 천안 봉명 쌍용 성환 직산"],["아산시","아산 배방 온양온천 신창"],["평택시","평택 지제 서정리 송탄 진위"]]
+  .forEach(([r,s])=>s.split(" ").forEach(n=>REGION["1"+n]=r));
+const regionOf=(line,st)=>REGION[line+st]||"";
+
+const EXITS = {};
+
+function rng(seed){return()=>{seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function hash(s){let h=2166136261;for(const c of s)h=Math.imul(h^c.charCodeAt(0),16777619);return h>>>0}
+function exitCars(line,st){
+  if(EXITS[line+st]) return EXITS[line+st];
+  const r=rng(hash("exit"+line+st)), a=Math.floor(r()*CAR_COUNT)+1;
+  let b=Math.floor(r()*CAR_COUNT)+1; if(b===a) b=a%CAR_COUNT+1;
+  return [a,b].sort((x,y)=>x-y);
+}
+
+let refreshOffset = 0;
+async function fetchCongestion(line,station,dirIdx){
+  const now=new Date(), h=now.getHours()+now.getMinutes()/60, wk=now.getDay()%6!==0;
+  const rush = wk ? Math.max(Math.exp(-((h-8.3)**2)/1.5), Math.exp(-((h-18.3)**2)/2)) : 0.25;
+  const base = 0.25 + 0.5*rush;
+  const bucket = Math.floor(now.getTime()/(5*60*1000)) + refreshOffset;
+  const r = rng(hash(line+station+dirIdx)+bucket);
+  const near = exitCars(line,station);
+  return Array.from({length:CAR_COUNT},(_,i)=>{
+    const v = base + (r()-0.5)*0.55 + (near.includes(i+1)?0.22:-0.04);
+    return Math.round(Math.min(1,Math.max(0.05,v))*100);
+  });
+}
+
+const LV = p => p<40?"low":p<70?"mid":"high";
+const LVTXT = {low:"여유",mid:"보통",high:"복잡"};
+const FACE = {low:"( ˶ˆ⤙ˆ˵ )",mid:"( • ̀ω•́ )",high:"( 😭 )"};
+const $ = id => document.getElementById(id);
+const state = {line:"1", station:null};
+
+const chips=$("chips");
+Object.entries(LINES).forEach(([n,l])=>{
+  const b=document.createElement("button");
+  b.type="button"; b.className="chip"; b.textContent=n; b.style.background=l.color;
+  b.setAttribute("aria-label",n+"호선"); b.dataset.line=n;
+  b.addEventListener("click",()=>setLine(n));
+  chips.appendChild(b);
+});
+function setLine(n,keepStation){
+  state.line=n;
+  chips.querySelectorAll(".chip").forEach(c=>c.setAttribute("aria-pressed",c.dataset.line===n));
+  $("dir").innerHTML="";
+  LINES[n].dir.forEach((d,i)=>$("dir").add(new Option(d,i)));
+  if(!keepStation){ state.station=null; $("q").value=""; }
+  renderList();
+}
+
+const q=$("q"), list=$("list");
+let items=[], active=-1;
+function renderList(){
+  const kw=q.value.trim().replace(/역$/,"");
+  items=[];
+  if(kw){
+    for(const [n,l] of Object.entries(LINES))
+      l.stations.forEach(s=>{ if(s.includes(kw)||regionOf(n,s).includes(kw)) items.push({line:n,st:s}); });
+    items.sort((a,b)=>(a.line===state.line?0:1)-(b.line===state.line?0:1) || (a.st.startsWith(kw)?0:1)-(b.st.startsWith(kw)?0:1));
+  }else{
+    items=LINES[state.line].stations.map(s=>({line:state.line,st:s}));
+  }
+  items=items.slice(0,80); active=-1;
+  list.innerHTML = items.length
+    ? items.map((it,i)=>{const rg=regionOf(it.line,it.st);
+        return `<li role="option" data-i="${i}"><span class="b" style="background:${LINES[it.line].color}">${it.line}</span>${it.st}역${rg?`<span class="rg">${rg}</span>`:""}</li>`}).join("")
+    : `<li class="none">검색 결과가 없어요 🥺</li>`;
+}
+const openList=()=>{list.hidden=false;q.setAttribute("aria-expanded","true")};
+const closeList=()=>{list.hidden=true;q.setAttribute("aria-expanded","false")};
+function pick(i){
+  const it=items[i]; if(!it) return;
+  if(it.line!==state.line) setLine(it.line,true);
+  state.station=it.st; q.value=it.st+"역"; $("msg").textContent=""; closeList();
+}
+q.addEventListener("focus",()=>{renderList();openList();});
+q.addEventListener("input",()=>{state.station=null;renderList();openList();});
+q.addEventListener("keydown",e=>{
+  const lis=[...list.querySelectorAll("li[data-i]")];
+  if(e.key==="ArrowDown"||e.key==="ArrowUp"){
+    e.preventDefault(); openList();
+    active=(active+(e.key==="ArrowDown"?1:-1)+lis.length)%Math.max(lis.length,1);
+    lis.forEach((li,i)=>li.classList.toggle("on",i===active));
+    lis[active]?.scrollIntoView({block:"nearest"});
+  }else if(e.key==="Enter" && !list.hidden && active>=0){
+    e.preventDefault(); pick(active);
+  }else if(e.key==="Escape") closeList();
+});
+list.addEventListener("mousedown",e=>{const li=e.target.closest("li[data-i]"); if(li){e.preventDefault();pick(+li.dataset.i);}});
+document.addEventListener("click",e=>{if(!e.target.closest(".search")) closeList();});
+
+async function executeSearch() {
+  if(!state.station){
+    const kw=q.value.trim().replace(/역$/,"");
+    const hit=LINES[state.line].stations.includes(kw)?{line:state.line,st:kw}
+      :Object.entries(LINES).map(([n,l])=>l.stations.includes(kw)?{line:n,st:kw}:null).find(Boolean);
+    if(hit){ if(hit.line!==state.line) setLine(hit.line,true); state.station=hit.st; q.value=hit.st+"역"; }
+  }
+  if(!state.station){ $("msg").textContent="목록에서 역을 먼저 골라 주세요! 🥺"; q.focus(); return; }
+  $("msg").textContent="";
+  const {line,station}=state, dirIdx=+$("dir").value;
+  let data;
+  try{ data=await fetchCongestion(line,station,dirIdx); }
+  catch{ $("msg").textContent="혼잡도를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요."; return; }
+  show(line,station,dirIdx,data);
+}
+
+$("form").addEventListener("submit", async e=>{
+  e.preventDefault();
+  refreshOffset = 0;
+  await executeSearch();
+});
+
+$("refreshBtn").addEventListener("click", async ()=>{
+  const btn = $("refreshBtn");
+  btn.classList.add("spinning");
+  refreshOffset += 1;
+  await executeSearch();
+  setTimeout(()=>btn.classList.remove("spinning"), 600);
+});
+
+function show(line,station,dirIdx,data){
+  const near=exitCars(line,station), lv=data.map(LV);
+  const avg=Math.round(data.reduce((a,b)=>a+b,0)/data.length);
+  const min=Math.min(...data), best=data.indexOf(min)+1;
+
+  $("hLine").textContent=line+"호선"; $("hLine").style.background=LINES[line].color;
+  $("hText").textContent=`${station}역 · ${LINES[line].dir[dirIdx]}`;
+  $("hLvl").textContent=`전체 ${LVTXT[LV(avg)]} (약 ${avg}%)`; $("hLvl").className="lvl "+LV(avg);
+
+  $("cars").innerHTML=data.map((p,i)=>`
+    <div class="car ${i+1===best?"best":""}" style="--i:${i}">
+      <span class="no">${i+1}호차</span>
+      <div class="box ${lv[i]}" role="img" aria-label="${i+1}호차 혼잡도 ${LVTXT[lv[i]]} ${p}%">
+        ${i+1===best?'<span class="star">⭐</span>':""}
+        <span class="face">${FACE[lv[i]]}</span><span class="pct">${p}%</span>
+      </div>
+      <span class="near">${near.includes(i+1)?"🪜 계단/에스컬<br>레이터 근처":""}</span>
+    </div>`).join("");
+
+  const low=lv.map((v,i)=>v==="low"?i+1:0).filter(Boolean);
+  const high=lv.map((v,i)=>v==="high"?i+1:0).filter(Boolean);
+  
+  $("rec").innerHTML = low.length ? `${low.join(", ")}호차<br>완전 여유있어요! ✨`
+    : lv.includes("mid") ? `${best}호차가<br>그나마 제일 한산해요 🌿` : `모든 칸이 복잡해요 🥺<br>다음 열차를 기다려볼까요?`;
+    
+  const jam=near.filter(n=>lv[n-1]==="high");
+  $("warn").textContent = jam.length
+    ? `${jam.join(", ")}호차는 계단/에스컬레이터 앞이라 밀려요! 조금 이동해서 여유있는 칸을 노려봐요.`
+    : high.length ? `${high.join(", ")}호차가 꽉 찼어요. 쾌적한 다른 칸으로 이동해주세요!` : "우와~ 대부분의 칸이 넓고 여유로워요!";
+    
+  $("time").textContent=`${new Date().toLocaleTimeString("ko-KR")} 실시간 기준`;
+
+  $("hint").hidden=true; $("out").hidden=false;
+}
+
+setLine("1");
+</script>
+</body>
+</html>

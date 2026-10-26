@@ -146,6 +146,17 @@ st.markdown("""
         border-radius: 8px !important;
         font-weight: 600 !important;
     }
+
+    /* 예시 안내 박스 스타일 */
+    .example-box {
+        background-color: #EFF6FF;
+        border-left: 4px solid #3B82F6;
+        padding: 12px 16px;
+        border-radius: 8px;
+        font-size: 13px;
+        color: #1E40AF;
+        margin-bottom: 20px;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -218,11 +229,19 @@ else:
 
     if st.session_state.page == "fast_route":
         st.title("🚀 빠른 길 찾기")
-        st.caption("출발지와 도착지를 입력하시면 최적 대중교통 수단을 안내합니다.")
-        st.write("")
+        st.caption("지하철역 및 주요 버스 정류장 이름을 입력하여 검색할 수 있습니다.")
         
-        start_in = st.text_input("출발지 (역 또는 정류장)", value="성환역")
-        end_in = st.text_input("도착지 (역 또는 정류장)", value="평택역")
+        # 검색 방법 안내 가이드 박스
+        st.markdown("""
+            <div class="example-box">
+                <b>💡 검색 입력 예시 가이드</b><br>
+                • <b>지하철역 검색</b>: <code>성환역</code>, <code>평택역</code>, <code>서울역</code>, <code>강남역</code>, <code>천안역</code><br>
+                • <b>버스 정류장 검색</b>: <code>남서울대</code>, <code>성환버스터미널</code>, <code>천안터미널</code>, <code>서울역버스환승센터</code>
+            </div>
+        """, unsafe_allow_html=True)
+        
+        start_in = st.text_input("출발지 (예: 성환역, 남서울대)", value="성환역")
+        end_in = st.text_input("도착지 (예: 평택역, 천안터미널)", value="평택역")
         
         if st.button("최적 경로 계산", type="primary", use_container_width=True):
             success, result = calculate_fast_route(start_in, end_in)

@@ -105,4 +105,52 @@ if st.session_state.page == "home":
 
         st.write("")
 
-        st.markdown('<div class="card-yellow"><h2>⭐ 즐겨찾기</h2><p>자주 가는 장소를 저장해보세요</p></div>',
+        st.markdown('<div class="card-yellow"><h2>⭐ 즐겨찾기</h2><p>자주 가는 장소를 저장해보세요</p></div>', unsafe_allow_html=True)
+        if st.button("즐겨찾기 목록 보기", key="btn_fav", use_container_width=True):
+            go_to("favorites")
+            st.rerun()
+
+# --- 2. 상세 페이지들 ---
+else:
+    if st.button("⬅️ 메인 홈으로 돌아가기"):
+        go_to("home")
+        st.rerun()
+
+    st.divider()
+
+    if st.session_state.page == "fast_route":
+        st.title("📍 빠른 길 찾기")
+        start = st.text_input("출발지 입력", value="서울역")
+        end = st.text_input("도착지 입력", value="강남역")
+        
+        if st.button("최적 경로 검색", type="primary"):
+            duration, transport_info = calculate_route_time(start, end)
+            if duration == 0:
+                st.warning("출발지와 도착지가 같습니다. 다른 장소를 입력해 주세요.")
+            else:
+                st.success(f"<b>{start}</b> ➡️ <b>{end}</b><br>⏱️ 최단 소요 시간: <b>약 {duration}분</b> ({transport_info})", icon="🚗")
+
+    elif st.session_state.page == "transit":
+        st.title("🚌 대중교통 경로 안내")
+        start = st.text_input("출발지 입력", value="홍대입구역", key="tr_start")
+        end = st.text_input("도착지 입력", value="잠실역", key="tr_end")
+        
+        if st.button("대중교통 경로 찾기", type="primary"):
+            duration, transport_info = calculate_route_time(start, end)
+            if duration == 0:
+                st.warning("출발지와 도착지가 같습니다.")
+            else:
+                st.info(f"🚌 <b>{start}</b>에서 <b>{end}</b>까지 대중교통 추천 경로<br>⏱️ 예상 소요 시간: <b>약 {duration}분</b>", icon="ℹ️")
+
+    elif st.session_state.page == "recent":
+        st.title("🕒 최근 검색 기록")
+        if st.session_state.recent_searches:
+            for item in st.session_state.recent_searches:
+                st.write(f"- 🔍 {item}")
+        else:
+            st.write("최근 검색 기록이 없습니다.")
+
+    elif st.session_state.page == "favorites":
+        st.title("⭐ 즐겨찾기 장소")
+        for fav in st.session_state.favorites:
+            st.write(f"- 📌 {fav}")

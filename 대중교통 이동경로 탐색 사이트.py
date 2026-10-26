@@ -1,21 +1,10 @@
 import streamlit as st
 import streamlit.components.v1 as components
 
-# 페이지 기본 설정
+# 페이지 기본 설정 (와이드 레이아웃)
 st.set_page_config(page_title="대중교통 이동경로 탐색", layout="wide")
 
-# ==========================================
-# 사이드바: Gemini API Key 입력 (선택)
-# ==========================================
-st.sidebar.title("🤖 AI 문의 설정")
-api_key = st.sidebar.text_input("Gemini API Key (선택)", type="password", help="API 키를 넣으면 AI 대답 기능이 활성화됩니다.")
-
-if "chat_history" not in st.session_state:
-    st.session_state.chat_history = []
-
-# ==========================================
-# 원본 HTML 레이아웃 (버튼 이동 기능만 제거)
-# ==========================================
+# 원본 HTML 디자인 100% 유지 (버튼 클릭 이동 제거 / 정적 서비스 소개 카드화)
 html_code = """
 <!DOCTYPE html>
 <html lang="ko">
@@ -73,5 +62,27 @@ html_code = """
       <ul class="space-y-3 text-slate-600 text-sm md:text-base">
         <li class="flex items-start gap-2">
           <i class="fa-solid fa-check text-emerald-500 mt-1"></i>
-          <span>본 사이트는 대중교통 안내 및 이동경로 관련 주요 정보를 종합 제공합니다.</span>
+          <span>본 사이트는 대중교통 안내 및 이동경로 관련 주요 정보 서비스를 제공합니다.</span>
         </li>
+        <li class="flex items-start gap-2">
+          <i class="fa-solid fa-check text-emerald-500 mt-1"></i>
+          <span><strong>최적 경로 찾기:</strong> 출발지와 도착지를 입력하여 버스 및 지하철의 환승 최적 경로를 조회합니다.</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <i class="fa-solid fa-check text-emerald-500 mt-1"></i>
+          <span><strong>지하철 & 버스 혼잡도:</strong> 실시간 통계 데이터를 기반으로 각 칸 및 노선의 혼잡 상태를 미리 파악할 수 있습니다.</span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- 주요 서비스 항목 나열 (버튼 클릭 효과 제거) -->
+    <section>
+      <div class="text-center mb-8">
+        <h2 class="text-2xl md:text-3xl font-bold text-slate-900">제공 기능 안내</h2>
+        <p class="text-slate-500 mt-1">대중교통 이동경로 탐색 사이트에서 제공하는 서비스 목록입니다.</p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+        <!-- 기능 카드 1: 최적 경로 찾기 -->
+        <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-

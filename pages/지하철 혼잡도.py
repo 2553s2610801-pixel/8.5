@@ -108,6 +108,38 @@ def label_of(e):
 LABEL2ENTRY = {label_of(e): e for e in ENTRIES}
 
 
+def search_entries(pool, query):
+    """띄어쓰기로 나눈 검색어가 모두 들어 있는 역을 찾아요. (순서 상관없음)
+    예: '두정 1호선', '1호선 두정', '1호선두정', '2호선', '천안'"""
+    tokens = [t for t in (query or "").replace(",", " ").split() if t]
+    if not tokens:
+        return list(pool)
+    scored = []
+    for idx, e in enumerate(pool):
+        name = disp(e["station"])
+        rg = REGION.get((e["line"], e["station"]), "")
+        hay = (name + e["line"] + rg).replace(" ", "")
+        if not all(t in hay for t in tokens):
+            # '1호선두정'처럼 붙여 쓴 경우도 허용
+            joined = "".join(tokens)
+            if joined not in (e["line"] + name) and joined not in (name + e["line"]):
+                continue
+        t0 = tokens[0]
+        if t0 in (e["station"], name, e["line"]):
+            rank = 0
+        elif e["station"].startswith(t0) or e["line"].startswith(t0):
+            rank = 1
+        else:
+            rank = 2
+        if any(t == e["line"] for t in tokens):
+            rank = min(rank, 0)
+        elif any(t.endswith("호선") for t in tokens):
+            rank = max(rank, 2)
+        scored.append((rank, idx, e))
+    scored.sort(key=lambda x: (x[0], x[1]))
+    return [x[2] for x in scored]
+
+
 def mascot_html(height=80, extra_style=""):
     """chiikawa.png 가 같은 폴더에 있으면 이미지를, 없으면 이모티콘을 보여줘요."""
     try:
@@ -128,15 +160,21 @@ def clamp(v, lo, hi):
     return max(lo, min(hi, v))
 
 
+def sig(x, center, k=5.0):
+    return 1.0 / (1.0 + math.exp(-k * (x - center)))
+
+
 def time_base(h, weekday):
     if h < 5.5:
         return 0.05
+    # 저녁 17~21시는 퇴근 시간대라 계속 붐벼요 (부드럽게 올랐다가 내려가요)
+    evening = sig(h, 16.8) * (1.0 - sig(h, 21.3))
     if weekday:
-        rush = max(math.exp(-((h - 8.2) ** 2) / 1.4), math.exp(-((h - 18.3) ** 2) / 2.0))
+        morning = math.exp(-((h - 8.2) ** 2) / 1.4)
         mid = 0.35 * math.exp(-((h - 13.0) ** 2) / 12.0)
-        base = 0.18 + 0.55 * max(rush, mid)
+        base = 0.18 + 0.55 * max(morning, evening, mid)
     else:
-        base = 0.15 + 0.30 * math.exp(-((h - 14.0) ** 2) / 12.0)
+        base = 0.15 + 0.30 * max(math.exp(-((h - 14.0) ** 2) / 12.0), 0.7 * evening)
     if h >= 23.5:
         base *= 0.5
     return base
@@ -156,15 +194,30 @@ def exit_cars(e, dir_idx):
     return sorted(set([a, b]))
 
 
-def car_loads(e, dir_idx, now, offset):
-    h = now.hour + now.minute / 60.0
-    base = clamp(time_base(h, now.weekday() < 5) + station_bias(e), 0.04, 0.95)
-    bucket = int(now.timestamp() // 300) + offset
-    r = random.Random(crc(f"{e['line']}|{e['station']}|{dir_idx}") + bucket)
+SLOT_SEC = 1800          # 혼잡도는 30분마다 갱신
+BUSY_CARS = (3, 5, 8)    # 승객이 더 많이 몰리는 칸
+
+
+def slot_of(now):
+    start_ts = int(now.timestamp() // SLOT_SEC) * SLOT_SEC
+    start = datetime.fromtimestamp(start_ts, KST)
+    return start, start + timedelta(seconds=SLOT_SEC)
+
+
+def car_loads(e, dir_idx, now):
+    """같은 30분 안에서는 새로고침해도 값이 그대로예요."""
+    slot, _ = slot_of(now)
+    h = slot.hour + slot.minute / 60.0
+    base = clamp(time_base(h, slot.weekday() < 5) + station_bias(e), 0.04, 0.95)
+    r = random.Random(crc(f"{e['line']}|{e['station']}|{dir_idx}") + int(slot.timestamp() // SLOT_SEC))
     exits = exit_cars(e, dir_idx)
     out = []
     for i in range(e["cars"]):
-        v = base + (r.random() - 0.5) * 0.30 + (0.20 if (i + 1) in exits else -0.05)
+        n = i + 1
+        v = base + (r.random() - 0.5) * 0.16
+        v += 0.15 if n in exits else -0.04
+        if n in BUSY_CARS:
+            v += 0.12
         out.append(int(round(clamp(v, 0.05, 1.0) * 100)))
     return out
 
@@ -263,22 +316,19 @@ div.stButton > button:hover { border-color:#ff7399; color:#ff5285; }
 st.markdown(CSS, unsafe_allow_html=True)
 
 # ───────────────────────── 세션 상태 ─────────────────────────
+st.session_state.setdefault("q", "")
 st.session_state.setdefault("prefer", None)   # 즐겨찾기/자주 찾는 역에서 고른 라벨
 st.session_state.setdefault("favs", [])       # 하트 누른 역 라벨 목록
-st.session_state.setdefault("offset", 0)
 
 
 def set_prefer(label):
     st.session_state["prefer"] = label
     st.session_state["line_sel"] = "전체 노선"
+    st.session_state["q"] = ""
 
 
 def clear_prefer():
     st.session_state["prefer"] = None
-
-
-def bump_refresh():
-    st.session_state["offset"] += 1
 
 
 def toggle_fav(label):
@@ -297,7 +347,8 @@ def render_header(e, dir_idx, avg, now):
         f'<div class="head"><span class="badge" style="background:{e["color"]}">{html.escape(e["line"])}</span>'
         f'<span class="stitle">{html.escape(disp(e["station"]))} · {html.escape(e["dirs"][dir_idx])}</span>'
         f'<span class="pill" style="background:{LV_BG[lv]};color:{LV_FG[lv]}">전체 {LV_TXT[lv]} · 약 {avg}%</span></div>'
-        f'<p class="clock">🕒 {now.strftime("%Y-%m-%d")} ({WEEKDAYS[now.weekday()]}) {now.strftime("%H:%M:%S")} 기준</p>',
+        f'<p class="clock">🕒 현재 {now.strftime("%Y-%m-%d")} ({WEEKDAYS[now.weekday()]}) {now.strftime("%H:%M:%S")} · '
+        f'혼잡도 기준 {slot_of(now)[0].strftime("%H:%M")} (다음 갱신 {slot_of(now)[1].strftime("%H:%M")})</p>',
         unsafe_allow_html=True,
     )
 
@@ -500,22 +551,34 @@ entry = None
 dir_idx = 0
 
 with st.container(border=True):
+    query = st.text_input("역 검색 (노선과 같이 써도 돼요)", key="q", on_change=clear_prefer,
+                          placeholder="예: 두정 1호선 / 2호선 강남 / 천안  (입력 후 Enter)")
     line_sel = st.selectbox("노선 선택", ["전체 노선"] + LINE_NAMES, key="line_sel",
                             on_change=clear_prefer)
     pool = ENTRIES if line_sel == "전체 노선" else [e for e in ENTRIES if e["line"] == line_sel]
-    labels = [label_of(e) for e in pool]
+    try:
+        found = search_entries(pool, query)
+    except Exception:
+        found = list(pool)
+    labels = [label_of(e) for e in found]
+    if query.strip() and not labels:
+        st.warning("검색 결과가 없어요 🥺 목록에 있는 역만 조회할 수 있어요.")
+    elif query.strip():
+        st.caption(f"🔍 검색 결과 {len(labels)}개 · 맨 위 역을 먼저 보여드려요")
 
     idx = None
     prefer = st.session_state.get("prefer")
     if prefer in labels:
         idx = labels.index(prefer)
+    elif query.strip() and labels:
+        idx = 0
 
     try:
         cs, ch = st.columns([6, 1], vertical_alignment="bottom")
     except TypeError:
         cs, ch = st.columns([6, 1])
     with cs:
-        pick = st.selectbox("역 선택 (글자를 입력하면 검색돼요)", labels, index=idx,
+        pick = st.selectbox("역 선택 (여기서 바로 입력해도 돼요)", labels, index=idx,
                             placeholder="역 이름을 입력하세요 (예: 두정, 강남, 해운대)")
     entry = LABEL2ENTRY.get(pick) if pick else None
     with ch:
@@ -528,7 +591,7 @@ with st.container(border=True):
 
     dir_idx = st.selectbox("방향", [0, 1],
                            format_func=lambda i: entry["dirs"][i] if entry else ("상행" if i == 0 else "하행"))
-    st.button("🔄 실시간 새로고침", use_container_width=True, on_click=bump_refresh)
+    st.button("🔄 새로고침", use_container_width=True)
 
 if entry is None:
     st.markdown(
@@ -547,7 +610,7 @@ if entry is None:
 else:
     try:
         now = now_kst()
-        loads = car_loads(entry, dir_idx, now, st.session_state["offset"])
+        loads = car_loads(entry, dir_idx, now)
         exits = exit_cars(entry, dir_idx)
         best = loads.index(min(loads)) + 1
         avg = int(round(sum(loads) / len(loads)))
@@ -573,6 +636,6 @@ if favs:
 
 st.markdown(
     '<p class="foot">※ 이 앱의 혼잡도는 시간대·역 정보로 만든 <b>가상(시뮬레이션) 데이터</b>라 실제 혼잡도와 다를 수 있어요. '
-    "새로고침은 5분 단위로 값이 바뀌는 방식이에요.</p>",
+    "혼잡도는 30분마다 갱신되고, 그 사이에 새로고침해도 값이 크게 바뀌지 않아요.</p>",
     unsafe_allow_html=True,
 )

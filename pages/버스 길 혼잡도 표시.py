@@ -2,10 +2,8 @@
 import streamlit as st
 import requests
 import pandas as pd
-import folium
 import xml.etree.ElementTree as ET
-
-from streamlit_folium import st_folium
+from datetime import datetime
 
 st.set_page_config(
     page_title="전국 버스 도로 혼잡도",
@@ -13,8 +11,9 @@ st.set_page_config(
     layout="wide",
 )
 
-ITS_URL = "https://openapi.its.go.kr/trafficInfo"
+API_URL = "https://openapi.its.go.kr/trafficInfo"
 
+# 지역별 조회 범위: 경도 최소/최대, 위도 최소/최대
 REGIONS = {
     "전국": (124.5, 131.9, 33.0, 38.7),
     "서울": (126.7, 127.2, 37.4, 37.7),
@@ -37,14 +36,77 @@ REGIONS = {
 }
 
 
-def get_api_key():
+def get_secret_key():
+    """Streamlit Secrets에서 API 키를 읽는다."""
     try:
         return str(st.secrets.get("ITS_API_KEY", "")).strip()
     except Exception:
         return ""
 
 
+def parse_traffic_xml(xml_text):
+    """XML 응답에서 도로 소통정보를 추출한다."""
+    root = ET.fromstring(xml_text)
+
+    result_code = root.findtext(".//header/resultCode")
+    result_msg = root.findtext(".//header/resultMsg")
+
+    # 오류 응답도 정상 데이터로 오인하지 않도록 확인한다.
+    if result_code not in (None, "0"):
+        raise ValueError(
+            f"교통 API 응답 오류: {result_msg or result_code}"
+        )
+
+    rows = []
+
+    for item in root.findall(".//item"):
+        def get_text(*names):
+            for name in names:
+                value = item.findtext(name)
+                if value and value.strip():
+                    return value.strip()
+            return ""
+
+        road_name = get_text("roadName", "roadNm", "linkName")
+        speed_text = get_text("speed", "avgSpeed")
+        travel_time_text = get_text("travelTime")
+        link_id = get_text("linkId", "linkNo")
+        created_date = get_text("createdDate", "collectTime")
+
+        try:
+            speed = float(speed_text)
+        except (ValueError, TypeError):
+            continue
+
+        if speed < 0:
+            continue
+
+        if speed <= 20:
+            status = "🔴 정체"
+            color = "#ffcccc"
+        elif speed <= 40:
+            status = "🟡 서행"
+            color = "#fff0b3"
+        else:
+            status = "🟢 원활"
+            color = "#c9f2d0"
+
+        rows.append({
+            "도로명": road_name or "이름 미제공",
+            "현재 속도(km/h)": speed,
+            "혼잡 상태": status,
+            "링크 ID": link_id,
+            "통행시간(분)": travel_time_text,
+            "수집 시각": created_date,
+            "_색상": color,
+        })
+
+    return rows
+
+
+@st.cache_data(ttl=60, show_spinner=False)
 def fetch_traffic(api_key, region):
+    """선택한 지역의 도로 교통정보를 조회한다."""
     min_x, max_x, min_y, max_y = REGIONS[region]
 
     params = {
@@ -58,373 +120,247 @@ def fetch_traffic(api_key, region):
     }
 
     response = requests.get(
-        ITS_URL,
+        API_URL,
         params=params,
-        timeout=25,
+        timeout=20,
     )
     response.raise_for_status()
 
-    root = ET.fromstring(response.content)
-
-    result_code = root.findtext(".//header/resultCode")
-    result_msg = root.findtext(".//header/resultMsg")
-
-    if result_code not in (None, "0"):
-        raise ValueError(
-            f"ITS API 오류: {result_msg or result_code}"
-        )
-
-    rows = []
-
-    for item in root.findall(".//item"):
-        road = item.findtext("roadName", default="").strip()
-        link_id = item.findtext("linkId", default="").strip()
-        speed_text = item.findtext("speed", default="").strip()
-
-        try:
-            speed = float(speed_text)
-        except (ValueError, TypeError):
-            continue
-
-        if speed < 0:
-            continue
-
-        if speed <= 20:
-            status = "정체"
-            color = "red"
-        elif speed <= 40:
-            status = "서행"
-            color = "orange"
-        else:
-            status = "원활"
-            color = "green"
-
-        rows.append({
-            "도로명": road or "이름 미제공",
-            "링크 ID": link_id,
-            "현재 속도(km/h)": speed,
-            "상태": status,
-            "색상": color,
-            "수집 시각": item.findtext(
-                "createdDate", default=""
-            ),
-        })
-
-    return pd.DataFrame(rows)
-
-
-def read_route(file):
-    """사용자가 제공한 노선 CSV를 검증한다."""
-    df = pd.read_csv(file)
-
-    required = {
-        "stop_order",
-        "stop_name",
-        "latitude",
-        "longitude",
-        "road_name",
-    }
-
-    missing = required - set(df.columns)
-
-    if missing:
-        raise ValueError(
-            "CSV에 필요한 열이 없습니다: "
-            + ", ".join(sorted(missing))
-        )
-
-    df = df.copy()
-
-    for col in ["latitude", "longitude", "stop_order"]:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-
-    df = df.dropna(
-        subset=["latitude", "longitude", "stop_order"]
-    )
-
-    if len(df) < 2:
-        raise ValueError(
-            "좌표가 유효한 정류장이 최소 2개 필요합니다."
-        )
-
-    if not df["latitude"].between(33, 39).all():
-        raise ValueError("위도 범위가 올바르지 않습니다.")
-
-    if not df["longitude"].between(124, 132).all():
-        raise ValueError("경도 범위가 올바르지 않습니다.")
-
-    df["road_name"] = df["road_name"].fillna("").astype(str)
-    df["stop_name"] = df["stop_name"].fillna("정류장").astype(str)
-
-    return df.sort_values("stop_order").reset_index(drop=True)
-
-
-def match_traffic(road_name, traffic):
-    """도로명으로 교통정보를 연결한다."""
-    if not road_name or traffic.empty:
-        return None
-
-    matched = traffic[
-        traffic["도로명"].str.strip() == road_name.strip()
-    ]
-
-    if matched.empty:
-        return None
-
-    # 같은 도로명이 여러 번 있으면 평균 속도를 사용한다.
-    return float(matched["현재 속도(km/h)"].mean())
-
-
-def speed_color(speed):
-    if speed is None:
-        return "blue"
-    if speed <= 20:
-        return "red"
-    if speed <= 40:
-        return "orange"
-    return "green"
+    return parse_traffic_xml(response.text)
 
 
 st.title("🚌 전국 버스 도로 혼잡도")
-st.write(
-    "실시간 도로 소통정보를 확인하고, "
-    "좌표가 있는 버스 노선을 지도에 표시합니다."
+st.caption(
+    "실시간 도로 소통정보를 확인하고 "
+    "교통 체증에 따른 버스 지연 가능성을 추정합니다."
 )
 
 with st.sidebar:
     st.header("조회 설정")
-    region = st.selectbox("지역", list(REGIONS.keys()), index=1)
+    region = st.selectbox(
+        "조회 지역",
+        list(REGIONS.keys()),
+        index=1,
+        help="전국 조회는 데이터가 많거나 API 제한에 걸릴 수 있습니다.",
+    )
 
-    api_key = get_api_key()
+    st.markdown("---")
+    st.subheader("API 설정")
 
-    if not api_key:
+    secret_key = get_secret_key()
+
+    if secret_key:
+        api_key = secret_key
+        st.success("Secrets에 등록된 API 키를 사용합니다.")
+    else:
         api_key = st.text_input(
             "ITS API 키",
             type="password",
+            help="공공데이터포털 또는 ITS에서 발급받은 키",
+        )
+        st.caption(
+            "배포할 때는 API 키를 Secrets에 등록하는 것을 권장합니다."
         )
 
-    st.caption(
-        "전국 범위 조회는 데이터 양과 API 이용 한도에 "
-        "영향을 받을 수 있습니다."
-    )
+    refresh = st.button("🔄 교통정보 새로 조회", use_container_width=True)
 
-st.subheader("1. 실시간 도로 소통정보")
+    st.markdown("---")
+    st.caption("교통정보는 API 제공 범위와 갱신 주기에 따라 달라집니다.")
+
+if refresh:
+    st.cache_data.clear()
 
 if not api_key:
     st.info(
-        "ITS API 키를 입력하거나 Streamlit Secrets에 "
-        "ITS_API_KEY를 등록하세요."
+        "왼쪽 메뉴에 ITS API 키를 입력하거나, "
+        "배포 환경의 Secrets에 ITS_API_KEY를 등록해 주세요."
     )
-    traffic = pd.DataFrame()
+    st.markdown(
+        "[국가교통정보센터 API 안내](https://www.its.go.kr/opendata/intro)"
+    )
+    st.stop()
+
+try:
+    with st.spinner(f"{region} 지역의 교통정보를 조회하는 중..."):
+        rows = fetch_traffic(api_key, region)
+except requests.exceptions.Timeout:
+    st.error("교통정보 서버 응답 시간이 초과되었습니다. 잠시 후 다시 시도해 주세요.")
+    st.stop()
+except requests.exceptions.HTTPError as e:
+    st.error(f"교통정보 서버 HTTP 오류: {e}")
+    st.stop()
+except requests.exceptions.RequestException as e:
+    st.error(f"네트워크 오류가 발생했습니다: {e}")
+    st.stop()
+except ET.ParseError:
+    st.error("API 응답을 XML로 해석할 수 없습니다. API 키와 응답 형식을 확인해 주세요.")
+    st.stop()
+except ValueError as e:
+    st.error(str(e))
+    st.stop()
+except Exception as e:
+    st.error(f"예상하지 못한 오류가 발생했습니다: {e}")
+    st.stop()
+
+if not rows:
+    st.warning(
+        "조회된 도로 정보가 없습니다. 다른 지역을 선택하거나 "
+        "API 이용 승인, 요청 범위, 응답 데이터를 확인해 주세요."
+    )
+    st.stop()
+
+df = pd.DataFrame(rows)
+df = df.drop_duplicates(
+    subset=["도로명", "링크 ID", "현재 속도(km/h)"]
+).reset_index(drop=True)
+
+# 상단 요약
+total = len(df)
+congested = int((df["현재 속도(km/h)"] <= 20).sum())
+slow = int(
+    (
+        (df["현재 속도(km/h)"] > 20)
+        & (df["현재 속도(km/h)"] <= 40)
+    ).sum()
+)
+smooth = int((df["현재 속도(km/h)"] > 40).sum())
+
+st.caption(
+    f"조회 지역: {region} · 화면 조회 시각: "
+    f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+)
+
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("조회 도로 구간", f"{total:,}개")
+c2.metric("🔴 정체", f"{congested:,}개")
+c3.metric("🟡 서행", f"{slow:,}개")
+c4.metric("🟢 원활", f"{smooth:,}개")
+
+st.markdown("### 🛣️ 도로 혼잡도")
+
+search = st.text_input(
+    "도로명 검색",
+    placeholder="예: 강남대로",
+)
+
+view_df = df.copy()
+
+if search.strip():
+    view_df = view_df[
+        view_df["도로명"].str.contains(
+            search.strip(),
+            case=False,
+            na=False,
+            regex=False,
+        )
+    ]
+
+if view_df.empty:
+    st.warning("검색 조건에 맞는 도로가 없습니다.")
 else:
-    if st.button("🔄 교통정보 새로 조회", type="primary"):
-        st.cache_data.clear()
+    display_df = view_df[
+        [
+            "도로명",
+            "현재 속도(km/h)",
+            "혼잡 상태",
+            "통행시간(분)",
+            "수집 시각",
+        ]
+    ].copy()
 
-    try:
-        with st.spinner("교통정보를 조회하고 있습니다..."):
-            traffic = fetch_traffic(api_key, region)
-
-        if traffic.empty:
-            st.warning(
-                "교통정보가 없습니다. API 승인, 요청 지역 및 "
-                "응답 데이터를 확인하세요."
-            )
+    def color_status(row):
+        speed = row["현재 속도(km/h)"]
+        if speed <= 20:
+            color = "#ffcccc"
+        elif speed <= 40:
+            color = "#fff0b3"
         else:
-            c1, c2, c3, c4 = st.columns(4)
-            c1.metric("도로 구간", f"{len(traffic):,}")
+            color = "#c9f2d0"
+        return [f"background-color: {color}"] * len(row)
 
-            c2.metric(
-                "🔴 정체",
-                int((traffic["현재 속도(km/h)"] <= 20).sum()),
-            )
-            c3.metric(
-                "🟡 서행",
-                int(
-                    (
-                        (traffic["현재 속도(km/h)"] > 20)
-                        & (traffic["현재 속도(km/h)"] <= 40)
-                    ).sum()
-                ),
-            )
-            c4.metric(
-                "🟢 원활",
-                int((traffic["현재 속도(km/h)"] > 40).sum()),
-            )
+    st.dataframe(
+        display_df.style.apply(color_status, axis=1),
+        use_container_width=True,
+        hide_index=True,
+    )
 
-            st.dataframe(
-                traffic[
-                    [
-                        "도로명",
-                        "링크 ID",
-                        "현재 속도(km/h)",
-                        "상태",
-                        "수집 시각",
-                    ]
-                ],
-                use_container_width=True,
-                hide_index=True,
-            )
+    st.download_button(
+        "조회 결과 CSV 다운로드",
+        data=display_df.to_csv(index=False).encode("utf-8-sig"),
+        file_name="traffic_data.csv",
+        mime="text/csv",
+    )
 
-    except requests.RequestException as e:
-        st.error(f"교통정보 연결 오류: {e}")
-        traffic = pd.DataFrame()
-    except ET.ParseError:
-        st.error("교통정보 응답을 해석할 수 없습니다.")
-        traffic = pd.DataFrame()
-    except ValueError as e:
-        st.error(str(e))
-        traffic = pd.DataFrame()
-    except Exception as e:
-        st.error(f"예상하지 못한 오류: {e}")
-        traffic = pd.DataFrame()
-
-st.divider()
-st.subheader("2. 버스 노선 지도")
+st.markdown("---")
+st.markdown("### ⏱️ 버스 지연 시간 추정")
 
 st.write(
-    "노선 좌표 CSV를 올려 주세요. "
-    "정류장 좌표와 해당 구간 도로명을 이용해 지도에 표시합니다."
+    "버스 노선의 평소 소요 시간과 해당 노선에 영향을 주는 도로의 "
+    "현재 평균 속도를 입력해 지연 가능성을 계산합니다."
 )
 
-st.download_button(
-    "노선 CSV 양식 다운로드",
-    data=(
-        "stop_order,stop_name,latitude,longitude,road_name\n"
-        "1,정류장 A,36.8151,127.1139,도로명 입력\n"
-        "2,정류장 B,36.8200,127.1200,도로명 입력\n"
-    ).encode("utf-8-sig"),
-    file_name="bus_route_template.csv",
-    mime="text/csv",
+road_names = sorted(
+    view_df["도로명"].dropna().astype(str).unique().tolist()
 )
 
-uploaded = st.file_uploader(
-    "버스 노선 CSV 업로드",
-    type=["csv"],
-)
-
-route = None
-
-if uploaded is not None:
-    try:
-        route = read_route(uploaded)
-    except Exception as e:
-        st.error(f"노선 파일을 읽을 수 없습니다: {e}")
-
-if route is not None:
-    center_lat = route["latitude"].mean()
-    center_lon = route["longitude"].mean()
-
-    map_view = folium.Map(
-        location=[center_lat, center_lon],
-        zoom_start=13,
-        control_scale=True,
+if road_names:
+    selected_road = st.selectbox("비교할 도로", road_names)
+    road_rows = view_df[view_df["도로명"] == selected_road]
+    current_speed = float(
+        road_rows["현재 속도(km/h)"].mean()
     )
 
-    # 정류장 좌표를 이용해 노선을 연결한다.
-    # 도로 좌표가 아니라 정류장 사이 직선이므로,
-    # 실제 도로 경로와 다를 수 있다.
-    for i in range(len(route) - 1):
-        current = route.iloc[i]
-        next_stop = route.iloc[i + 1]
+    col1, col2 = st.columns(2)
 
-        road_name = str(current["road_name"]).strip()
-        speed = match_traffic(road_name, traffic)
-        color = speed_color(speed)
-
-        if speed is None:
-            label = "실시간 속도 미연결"
-        else:
-            label = f"현재 속도: {speed:.1f} km/h"
-
-        folium.PolyLine(
-            locations=[
-                [current["latitude"], current["longitude"]],
-                [next_stop["latitude"], next_stop["longitude"]],
-            ],
-            color=color,
-            weight=6,
-            opacity=0.85,
-            tooltip=(
-                f"{road_name or '도로명 미입력'} | {label}"
-            ),
-        ).add_to(map_view)
-
-    for _, stop in route.iterrows():
-        folium.CircleMarker(
-            location=[stop["latitude"], stop["longitude"]],
-            radius=5,
-            color="blue",
-            fill=True,
-            fill_opacity=0.9,
-            tooltip=f"{stop['stop_order']}. {stop['stop_name']}",
-            popup=(
-                f"정류장: {stop['stop_name']}<br>"
-                f"도로명: {stop['road_name']}"
-            ),
-        ).add_to(map_view)
-
-    st_folium(
-        map_view,
-        use_container_width=True,
-        height=550,
-        key="bus_route_map",
-    )
-
-    st.caption(
-        "빨강: 속도 20km/h 이하 · "
-        "노랑: 20 초과~40km/h 이하 · "
-        "초록: 40km/h 초과 · "
-        "파랑: 교통정보 연결 안 됨. "
-        "정류장 사이 선은 직선이며 실제 도로 형상은 아닙니다."
-    )
-
-    st.subheader("3. 지연 시간 참고")
-
-    normal_minutes = st.number_input(
-        "평소 노선 소요 시간(분)",
-        min_value=1,
-        max_value=600,
-        value=30,
-    )
-
-    normal_speed = st.number_input(
-        "평소 도로 속도(km/h)",
-        min_value=1.0,
-        max_value=120.0,
-        value=40.0,
-    )
-
-    matched_speeds = []
-
-    for _, stop in route.iloc[:-1].iterrows():
-        speed = match_traffic(str(stop["road_name"]), traffic)
-        if speed is not None:
-            matched_speeds.append(speed)
-
-    if matched_speeds:
-        current_speed = sum(matched_speeds) / len(matched_speeds)
-
-        estimated = normal_minutes * normal_speed / max(
-            current_speed, 1
+    with col1:
+        normal_minutes = st.number_input(
+            "평소 버스 이동 시간(분)",
+            min_value=1,
+            max_value=600,
+            value=30,
         )
-        delay = max(0, estimated - normal_minutes)
 
-        a, b = st.columns(2)
-        a.metric("단순 예상 소요 시간", f"{estimated:.1f}분")
-        b.metric("예상 추가 지연", f"{delay:.1f}분")
+    with col2:
+        normal_speed = st.number_input(
+            "평소 해당 도로 주행 속도(km/h)",
+            min_value=1.0,
+            max_value=120.0,
+            value=40.0,
+            step=1.0,
+        )
+
+    st.metric("선택 도로 현재 평균 속도", f"{current_speed:.1f} km/h")
+
+    if st.button("예상 지연 시간 계산", type="primary"):
+        # 단순 비례 추정치이며, 실제 버스 도착예정정보는 아니다.
+        estimated_minutes = normal_minutes * normal_speed / max(
+            current_speed, 1.0
+        )
+        delay = max(0.0, estimated_minutes - normal_minutes)
+
+        result1, result2 = st.columns(2)
+        result1.metric("예상 이동 시간", f"{estimated_minutes:.1f}분")
+        result2.metric("예상 추가 지연", f"{delay:.1f}분")
+
+        if current_speed <= 20:
+            st.error("🔴 정체 구간입니다. 지연 가능성이 높을 수 있습니다.")
+        elif current_speed <= 40:
+            st.warning("🟡 서행 구간입니다. 지연 가능성을 확인하세요.")
+        else:
+            st.success("🟢 도로 흐름이 비교적 원활합니다.")
 
         st.caption(
-            "참고용 추정치입니다. 버스 위치, 정류장 정차, "
-            "신호, 버스전용차로와 실제 경로를 반영하지 않으며 "
-            "공식 도착예정시간이 아닙니다."
-        )
-    else:
-        st.info(
-            "노선의 도로명과 실시간 교통정보가 연결되지 않아 "
-            "지연 시간을 계산할 수 없습니다."
+            "주의: 이 결과는 현재 도로 속도가 평소 속도보다 "
+            "낮아졌다고 가정한 단순 추정치입니다. "
+            "신호 대기, 정류장 정차, 다른 도로 구간, 버스전용차로, "
+            "실제 버스 위치를 반영하지 않으므로 실제 도착 시간과 다를 수 있습니다."
         )
 else:
-    st.info(
-        "노선 CSV를 업로드하면 정류장 지도와 혼잡도 표시가 나타납니다. "
-        "실제 노선 자동 검색은 별도의 버스 노선 API 연결이 필요합니다."
-    )
+    st.info("지연 시간을 계산할 도로가 없습니다. 다른 검색 조건을 선택해 주세요.")
+
+st.markdown("---")
+st.caption(
+    "혼잡도 기준(현재 속도): 20km/h 이하 정체 · "
+    "20 초과~40km/h 이하 서행 · 40km/h 초과 원활. "
+    "이는 앱에서 사용하는 단순 분류 기준이며 공식 혼잡 판정과 다를 수 있습니다."
+)

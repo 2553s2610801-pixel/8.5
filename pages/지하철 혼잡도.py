@@ -1,8 +1,10 @@
+import base64
 import html
 import math
 import random
 import zlib
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import streamlit as st
 
@@ -81,51 +83,40 @@ for _rg, _names in [("천안시", "두정 천안 봉명 쌍용 성환 직산"),
         REGION[("1호선", _n)] = _rg
 
 ENTRIES = []
+_seen = set()
 for _line, _color, _cars, _dirs, _st in LINE_DEFS:
     for _s in _st.split():
+        if (_line, _s) in _seen:
+            continue
+        _seen.add((_line, _s))
         ENTRIES.append({"line": _line, "color": _color, "cars": _cars,
-                        "dirs": _dirs, "station": _s, "custom": False})
+                        "dirs": _dirs, "station": _s})
+
+LINE_NAMES = [d[0] for d in LINE_DEFS]
+
+
+def disp(name):
+    """역 이름 뒤에 '역'을 붙여요 (서울역처럼 이미 '역'으로 끝나면 그대로)."""
+    return name if name.endswith("역") else name + "역"
 
 
 def label_of(e):
-    if e.get("custom"):
-        return f"{e['station']}역 · 직접 입력 (목록에 없음)"
     rg = REGION.get((e["line"], e["station"]))
-    return f"{e['station']}역 · {e['line']}" + (f" ({rg})" if rg else "")
+    return f"{disp(e['station'])} · {e['line']}" + (f" ({rg})" if rg else "")
 
 
-# ───────────────────────── 검색 ─────────────────────────
-def normalize(q):
-    key = (q or "").strip().replace(" ", "")
-    if key.endswith("역"):
-        key = key[:-1]
-    return key[:20]
+LABEL2ENTRY = {label_of(e): e for e in ENTRIES}
 
 
-def search(q):
-    key = normalize(q)
-    if not key:
-        return []
-    scored = []
-    for idx, e in enumerate(ENTRIES):
-        s = e["station"]
-        if s == key:
-            score = 0
-        elif s.startswith(key):
-            score = 1
-        elif key in s:
-            score = 2
-        elif key in e["line"] or key in REGION.get((e["line"], s), ""):
-            score = 3
-        else:
-            continue
-        scored.append((score, idx, e))
-    scored.sort(key=lambda x: (x[0], x[1]))
-    res = [x[2] for x in scored[:80]]
-    if not res:
-        res = [{"line": "기타 노선", "color": "#8c7d87", "cars": 8,
-                "dirs": DIR_DEFAULT, "station": key, "custom": True}]
-    return res
+def mascot_html(height=80, extra_style=""):
+    """chiikawa.png 가 같은 폴더에 있으면 이미지를, 없으면 이모티콘을 보여줘요."""
+    try:
+        data = Path(__file__).with_name("chiikawa.png").read_bytes()
+        b64 = base64.b64encode(data).decode("ascii")
+        return (f'<img src="data:image/png;base64,{b64}" alt="마스코트" '
+                f'style="height:{height}px;width:auto;{extra_style}">')
+    except Exception:
+        return f'<span style="font-size:{int(height * 0.6)}px">🐭🐱🐰</span>'
 
 
 # ───────────────────────── 혼잡도 계산 (가상 데이터) ─────────────────────────
@@ -263,6 +254,8 @@ html, body, [class*="css"] { font-family: 'Gowun Dodum', 'Pretendard', sans-seri
 .sum { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
 .sum .m { flex:1; min-width:120px; background:#fff5f8; border-radius:18px; padding:8px 12px; text-align:center; font-weight:700; color:#5a434d; }
 .sum .m b { display:block; font-family:'Jua', sans-serif; font-size:1.3rem; }
+.bubble .mimg { float:right; margin:0 0 4px 12px; }
+[data-testid="stVerticalBlockBorderWrapper"] { border-radius:28px !important; border:2px dashed #fcd5e4 !important; background:#fff5f8; }
 div.stButton > button { border-radius:999px; border:2px solid #ffc2d4; background:#fff; color:#5a434d; font-weight:700; }
 div.stButton > button:hover { border-color:#ff7399; color:#ff5285; }
 </style>
@@ -270,15 +263,14 @@ div.stButton > button:hover { border-color:#ff7399; color:#ff5285; }
 st.markdown(CSS, unsafe_allow_html=True)
 
 # ───────────────────────── 세션 상태 ─────────────────────────
-st.session_state.setdefault("q", "")
-st.session_state.setdefault("prefer", None)
-st.session_state.setdefault("favs", [])      # [(역, 노선)]
+st.session_state.setdefault("prefer", None)   # 즐겨찾기/자주 찾는 역에서 고른 라벨
+st.session_state.setdefault("favs", [])       # 하트 누른 역 라벨 목록
 st.session_state.setdefault("offset", 0)
 
 
-def set_query(text, prefer=None):
-    st.session_state["q"] = text
-    st.session_state["prefer"] = prefer
+def set_prefer(label):
+    st.session_state["prefer"] = label
+    st.session_state["line_sel"] = "전체 노선"
 
 
 def clear_prefer():
@@ -289,13 +281,12 @@ def bump_refresh():
     st.session_state["offset"] += 1
 
 
-def toggle_fav(station, line):
+def toggle_fav(label):
     favs = st.session_state["favs"]
-    item = (station, line)
-    if item in favs:
-        favs.remove(item)
+    if label in favs:
+        favs.remove(label)
     else:
-        favs.append(item)
+        favs.append(label)
     st.session_state["favs"] = favs[:12]
 
 
@@ -304,7 +295,7 @@ def render_header(e, dir_idx, avg, now):
     lv = lvl(avg)
     st.markdown(
         f'<div class="head"><span class="badge" style="background:{e["color"]}">{html.escape(e["line"])}</span>'
-        f'<span class="stitle">{html.escape(e["station"])}역 · {html.escape(e["dirs"][dir_idx])}</span>'
+        f'<span class="stitle">{html.escape(disp(e["station"]))} · {html.escape(e["dirs"][dir_idx])}</span>'
         f'<span class="pill" style="background:{LV_BG[lv]};color:{LV_FG[lv]}">전체 {LV_TXT[lv]} · 약 {avg}%</span></div>'
         f'<p class="clock">🕒 {now.strftime("%Y-%m-%d")} ({WEEKDAYS[now.weekday()]}) {now.strftime("%H:%M:%S")} 기준</p>',
         unsafe_allow_html=True,
@@ -357,7 +348,7 @@ def render_recommend(loads, best, exits):
     else:
         sub = "대부분의 칸이 넓고 여유로워요. 편하게 타세요!"
     st.markdown(
-        f'<div class="bubble"><span class="tag">{MASCOT[mood]} 칸칸이의 추천!</span>'
+        f'<div class="bubble"><span class="mimg">{mascot_html(84)}</span><span class="tag">{MASCOT[mood]} 칸칸이의 추천!</span>'
         f'<div class="big">{big}</div><div class="sub">{sub}</div></div>',
         unsafe_allow_html=True,
     )
@@ -499,68 +490,61 @@ def render_spread(loads):
 
 # ───────────────────────── 메인 ─────────────────────────
 st.markdown(
-    '<div class="hero"><div class="logo">🐭</div><div><h1>칸칸 혼잡도</h1>'
+    f'<div class="hero"><div class="logo" style="width:auto;border-radius:30px;padding:4px 10px">{mascot_html(58)}</div>'
+    "<div><h1>칸칸 혼잡도</h1>"
     "<p>복잡복잡 싫어! 폭닥하고 여유로운 칸으로 타요 ( •̀ω•́ )✨</p></div></div>",
     unsafe_allow_html=True,
 )
 
-st.text_input(
-    "역 이름 검색",
-    key="q",
-    placeholder="예: 두정, 천안, 강남, 해운대, 반월당",
-    on_change=clear_prefer,
-)
+entry = None
+dir_idx = 0
 
-query = st.session_state["q"]
+with st.container(border=True):
+    line_sel = st.selectbox("노선 선택", ["전체 노선"] + LINE_NAMES, key="line_sel",
+                            on_change=clear_prefer)
+    pool = ENTRIES if line_sel == "전체 노선" else [e for e in ENTRIES if e["line"] == line_sel]
+    labels = [label_of(e) for e in pool]
 
-try:
-    cands = search(query)
-except Exception:
-    cands = []
-    st.error("검색 중 문제가 생겼어요. 다시 입력해 주세요.")
-
-if not cands:
-    st.markdown(
-        '<div class="hint"><span class="e">🌸 🚇 🌸</span>역 이름을 입력하면 칸별 혼잡도를 알려드려요!<br>'
-        "노선 이름(예: 2호선)으로도 검색할 수 있어요.</div>",
-        unsafe_allow_html=True,
-    )
-    st.caption("자주 찾는 역")
-    popular = [("서울역", "1호선"), ("강남", "2호선"), ("홍대입구", "2호선"),
-               ("잠실", "2호선"), ("두정", "1호선"), ("천안", "1호선")]
-    cols = st.columns(3)
-    for i, (s, ln) in enumerate(popular):
-        lab = f"{s}역 · {ln}"
-        rg = REGION.get((ln, s))
-        if rg:
-            lab += f" ({rg})"
-        cols[i % 3].button(lab, key=f"pop{i}", use_container_width=True,
-                           on_click=set_query, args=(s, lab))
-else:
-    labels = [label_of(c) for c in cands]
-    idx = 0
+    idx = None
     prefer = st.session_state.get("prefer")
     if prefer in labels:
         idx = labels.index(prefer)
 
-    c1, c2 = st.columns(2)
-    with c1:
-        pick = st.selectbox("검색 결과", labels, index=idx)
-    entry = cands[labels.index(pick)] if pick in labels else cands[0]
-    with c2:
-        dir_idx = st.selectbox("방향", list(range(len(entry["dirs"]))),
-                               format_func=lambda i: entry["dirs"][i])
+    try:
+        cs, ch = st.columns([6, 1], vertical_alignment="bottom")
+    except TypeError:
+        cs, ch = st.columns([6, 1])
+    with cs:
+        pick = st.selectbox("역 선택 (글자를 입력하면 검색돼요)", labels, index=idx,
+                            placeholder="역 이름을 입력하세요 (예: 두정, 강남, 해운대)")
+    entry = LABEL2ENTRY.get(pick) if pick else None
+    with ch:
+        if entry:
+            is_fav = pick in st.session_state["favs"]
+            st.button("💖" if is_fav else "🤍", key="heart", on_click=toggle_fav, args=(pick,),
+                      help="즐겨찾기 해제" if is_fav else "즐겨찾기에 추가", use_container_width=True)
+        else:
+            st.button("🤍", key="heart_off", disabled=True, use_container_width=True)
 
-    fav_item = (entry["station"], entry["line"])
-    b1, b2 = st.columns(2)
-    with b1:
-        st.button("🔄 실시간 새로고침", use_container_width=True, on_click=bump_refresh)
-    with b2:
-        if not entry.get("custom"):
-            is_fav = fav_item in st.session_state["favs"]
-            st.button("💔 즐겨찾기 해제" if is_fav else "💖 즐겨찾기 추가", use_container_width=True,
-                      on_click=toggle_fav, args=fav_item)
+    dir_idx = st.selectbox("방향", [0, 1],
+                           format_func=lambda i: entry["dirs"][i] if entry else ("상행" if i == 0 else "하행"))
+    st.button("🔄 실시간 새로고침", use_container_width=True, on_click=bump_refresh)
 
+if entry is None:
+    st.markdown(
+        f'<div class="hint"><span class="e">{mascot_html(110)}</span>역을 골라 주세요!<br>'
+        "목록에 있는 역만 조회할 수 있어요. 글자를 입력하면 바로 검색돼요 🌸</div>",
+        unsafe_allow_html=True,
+    )
+    st.caption("자주 찾는 역")
+    popular = ["서울역 · 1호선", "강남역 · 2호선", "홍대입구역 · 2호선",
+               "잠실역 · 2호선", "두정역 · 1호선 (천안시)", "천안역 · 1호선 (천안시)"]
+    cols = st.columns(3)
+    for i, lab in enumerate(popular):
+        if lab in LABEL2ENTRY:
+            cols[i % 3].button(lab, key=f"pop{i}", use_container_width=True,
+                               on_click=set_prefer, args=(lab,))
+else:
     try:
         now = now_kst()
         loads = car_loads(entry, dir_idx, now, st.session_state["offset"])
@@ -579,20 +563,16 @@ else:
     except Exception:
         st.error("혼잡도를 표시하는 중 문제가 생겼어요. 새로고침을 눌러 다시 시도해 주세요. 🥺")
 
-favs = st.session_state["favs"]
+favs = [f for f in st.session_state["favs"] if f in LABEL2ENTRY]
 if favs:
-    st.caption("💖 즐겨찾기")
+    st.caption("💖 내가 하트 누른 역")
     fcols = st.columns(3)
-    for i, (s, ln) in enumerate(favs):
-        lab = f"{s}역 · {ln}"
-        rg = REGION.get((ln, s))
-        if rg:
-            lab += f" ({rg})"
+    for i, lab in enumerate(favs):
         fcols[i % 3].button(lab, key=f"fav{i}", use_container_width=True,
-                            on_click=set_query, args=(s, lab))
+                            on_click=set_prefer, args=(lab,))
 
 st.markdown(
-    '<p class="foot">※ 이 앱의 혼잡도는 시간대·역 이름으로 만든 <b>가상(시뮬레이션) 데이터</b>라 실제 혼잡도와 다를 수 있어요. '
+    '<p class="foot">※ 이 앱의 혼잡도는 시간대·역 정보로 만든 <b>가상(시뮬레이션) 데이터</b>라 실제 혼잡도와 다를 수 있어요. '
     "새로고침은 5분 단위로 값이 바뀌는 방식이에요.</p>",
     unsafe_allow_html=True,
 )
